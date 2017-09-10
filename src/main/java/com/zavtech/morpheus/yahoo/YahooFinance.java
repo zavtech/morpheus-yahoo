@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2014-2016 Xavier Witdouck
+ * Copyright (C) 2014-2017 Xavier Witdouck
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,12 +13,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.zavtech.finance.yahoo;
+package com.zavtech.morpheus.yahoo;
 
 import java.time.LocalDate;
 import java.util.Set;
 
 import com.zavtech.morpheus.frame.DataFrame;
+import com.zavtech.morpheus.frame.DataFrameSource;
 
 /**
  * A convenience class to expose a more specific API to request data from Yahoo Finance
@@ -33,11 +34,11 @@ public class YahooFinance {
      * Static intializer
      */
     static {
-        DataFrame.read().register(new YahooOptionQuoteSource());
-        DataFrame.read().register(new YahooQuoteHistorySource());
-        DataFrame.read().register(new YahooQuoteLiveSource());
-        DataFrame.read().register(new YahooReturnSource());
-        DataFrame.read().register(new YahooStatsSource());
+        DataFrameSource.register(new YahooOptionSource());
+        DataFrameSource.register(new YahooQuoteHistorySource());
+        DataFrameSource.register(new YahooQuoteLiveSource());
+        DataFrameSource.register(new YahooReturnSource());
+        DataFrameSource.register(new YahooStatsSource());
     }
 
     /**
@@ -53,8 +54,8 @@ public class YahooFinance {
      * @return          the DataFrame of tickers
      */
     public DataFrame<String,YahooField> getEquityStatistics(Set<String> tickers) {
-        return DataFrame.read().apply(YahooStatsOptions.class, options -> {
-            options.setTickers(tickers);
+        return DataFrameSource.lookup(YahooStatsSource.class).read(options -> {
+            options.withTickers(tickers);
         });
     }
 
@@ -64,7 +65,7 @@ public class YahooFinance {
      * @return          the set of option expiry dates
      */
     public Set<LocalDate> getOptionExpiryDates(String ticker) {
-        return new YahooOptionQuoteSource().getExpiryDates(ticker);
+        return new YahooOptionSource().getExpiryDates(ticker);
     }
 
     /**
@@ -73,8 +74,8 @@ public class YahooFinance {
      * @return          the DataFrame with option quotes
      */
     public DataFrame<String,YahooField> getOptionQuotes(String ticker) {
-        return DataFrame.read().apply(YahooOptionQuoteOptions.class, options -> {
-            options.setTicker(ticker);
+        return DataFrameSource.lookup(YahooOptionSource.class).read(options -> {
+            options.withUnderlying(ticker);
         });
     }
 
@@ -85,9 +86,9 @@ public class YahooFinance {
      * @return          the DataFrame with option quotes
      */
     public DataFrame<String,YahooField> getOptionQuotes(String ticker, String expiry) {
-        return DataFrame.read().apply(YahooOptionQuoteOptions.class, options -> {
-            options.setTicker(ticker);
-            options.setExpiry(LocalDate.parse(expiry));
+        return DataFrameSource.lookup(YahooOptionSource.class).read(options -> {
+            options.withUnderlying(ticker);
+            options.withExpiry(LocalDate.parse(expiry));
         });
     }
 
@@ -98,9 +99,9 @@ public class YahooFinance {
      * @return          the DataFrame with option quotes
      */
     public DataFrame<String,YahooField> getOptionQuotes(String ticker, LocalDate expiry) {
-        return DataFrame.read().apply(YahooOptionQuoteOptions.class, options -> {
-            options.setTicker(ticker);
-            options.setExpiry(expiry);
+        return DataFrameSource.lookup(YahooOptionSource.class).read(options -> {
+            options.withUnderlying(ticker);
+            options.withExpiry(expiry);
         });
     }
 
@@ -113,11 +114,11 @@ public class YahooFinance {
      * @return          the frame of returns
      */
     public DataFrame<LocalDate,String> getDailyReturns(LocalDate start, LocalDate end, String...tickers) {
-        return DataFrame.read().apply(YahooReturnOptions.class, options -> {
-            options.setStart(start);
-            options.setEnd(end);
-            options.setType(YahooReturnOptions.Type.DAILY);
-            options.setTickers(tickers);
+        return DataFrameSource.lookup(YahooReturnSource.class).read(options -> {
+            options.withTickers(tickers);
+            options.withStartDate(start);
+            options.withEndDate(end);
+            options.daily();
         });
     }
 
@@ -130,11 +131,11 @@ public class YahooFinance {
      * @return          the frame of returns
      */
     public DataFrame<LocalDate,String> getCumReturns(LocalDate start, LocalDate end, String...tickers) {
-        return DataFrame.read().apply(YahooReturnOptions.class, options -> {
-            options.setStart(start);
-            options.setEnd(end);
-            options.setType(YahooReturnOptions.Type.DAILY);
-            options.setTickers(tickers);
+        return DataFrameSource.lookup(YahooReturnSource.class).read(options -> {
+            options.withTickers(tickers);
+            options.withStartDate(start);
+            options.withEndDate(end);
+            options.cumulative();
         });
     }
 
@@ -144,8 +145,8 @@ public class YahooFinance {
      * @return          the DataFrame of live quote data for all fields
      */
     public DataFrame<String,YahooField> getLiveQuotes(Set<String> tickers) {
-        return DataFrame.read().apply(YahooQuoteLiveOptions.class, options -> {
-           options.setTickers(tickers);
+        return DataFrameSource.lookup(YahooQuoteLiveSource.class).read(options -> {
+           options.withTickers(tickers);
         });
     }
 
@@ -156,9 +157,9 @@ public class YahooFinance {
      * @return          the DataFrame of live quote data for all fields
      */
     public DataFrame<String,YahooField> getLiveQuotes(Set<String> tickers, YahooField... fields) {
-        return DataFrame.read().apply(YahooQuoteLiveOptions.class, options -> {
-            options.setTickers(tickers);
-            options.setFields(fields);
+        return DataFrameSource.lookup(YahooQuoteLiveSource.class).read(options -> {
+            options.withTickers(tickers);
+            options.withFields(fields);
         });
     }
 
@@ -171,11 +172,11 @@ public class YahooFinance {
      * @return              the DataFrame contains OHLC end of day bars
      */
     public DataFrame<LocalDate,YahooField> getEndOfDayQuotes(String ticker, String start, String end, boolean adjusted) {
-        return DataFrame.read().apply(YahooQuoteHistoryOptions.class, options -> {
-            options.setTicker(ticker);
-            options.setStart(LocalDate.parse(start));
-            options.setEnd(LocalDate.parse(end));
-            options.setAdjustForSplits(adjusted);
+        return DataFrameSource.lookup(YahooQuoteHistorySource.class).read(options -> {
+            options.withTicker(ticker);
+            options.withStartDate(LocalDate.parse(start));
+            options.withEndDate(LocalDate.parse(end));
+            options.withAdjustForSplitsAndDividends(adjusted);
         });
     }
 
@@ -188,11 +189,11 @@ public class YahooFinance {
      * @return              the DataFrame contains OHLC end of day bars
      */
     public DataFrame<LocalDate,YahooField> getEndOfDayQuotes(String ticker, LocalDate start, LocalDate end, boolean adjusted) {
-        return DataFrame.read().apply(YahooQuoteHistoryOptions.class, options -> {
-            options.setTicker(ticker);
-            options.setStart(start);
-            options.setEnd(end);
-            options.setAdjustForSplits(adjusted);
+        return DataFrameSource.lookup(YahooQuoteHistorySource.class).read(options -> {
+            options.withTicker(ticker);
+            options.withStartDate(start);
+            options.withEndDate(end);
+            options.withAdjustForSplitsAndDividends(adjusted);
         });
     }
 

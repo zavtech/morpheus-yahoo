@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2014-2016 Xavier Witdouck
+ * Copyright (C) 2014-2017 Xavier Witdouck
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,9 +13,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.zavtech.finance.yahoo;
+package com.zavtech.morpheus.yahoo;
 
 import java.io.BufferedReader;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.URL;
 import java.util.ArrayList;
@@ -29,6 +30,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Consumer;
 
 import com.univocity.parsers.common.ParsingContext;
 import com.univocity.parsers.common.processor.RowProcessor;
@@ -39,6 +41,7 @@ import com.zavtech.morpheus.array.Array;
 import com.zavtech.morpheus.frame.DataFrame;
 import com.zavtech.morpheus.frame.DataFrameException;
 import com.zavtech.morpheus.frame.DataFrameSource;
+import com.zavtech.morpheus.util.Asserts;
 import com.zavtech.morpheus.util.http.HttpClient;
 
 /**
@@ -50,7 +53,7 @@ import com.zavtech.morpheus.util.http.HttpClient;
  *
  * <p><strong>This is open source software released under the <a href="http://www.apache.org/licenses/LICENSE-2.0">Apache 2.0 License</a></strong></p>
  */
-public class YahooQuoteLiveSource implements DataFrameSource<String,YahooField,YahooQuoteLiveOptions> {
+public class YahooQuoteLiveSource extends DataFrameSource<String,YahooField,YahooQuoteLiveSource.Options> {
 
     private static final Map<YahooField,String> codeMap = new LinkedHashMap<>();
 
@@ -128,20 +131,17 @@ public class YahooQuoteLiveSource implements DataFrameSource<String,YahooField,Y
 
 
     @Override
-    public <T extends Options<?,?>> boolean isSupported(T options) {
-        return options instanceof YahooQuoteLiveOptions;
-    }
-
-    @Override
-    public DataFrame<String, YahooField> read(YahooQuoteLiveOptions options) throws DataFrameException {
+    public DataFrame<String,YahooField> read(Consumer<Options> configurator) throws DataFrameException {
         try {
             final StringBuilder url = new StringBuilder(urlTemplate);
-            final Map<String,String> tickerMap = appendTickers(url, Options.validate(options));
+            final Options options = initOptions(new Options(), configurator);
+            final Map<String,String> tickerMap = appendTickers(url, options);
             final List<YahooField> fieldList = appendFields(url, options);
             final URL queryUrl = new URL(url.toString());
             return HttpClient.getDefault().<DataFrame<String,YahooField>>doGet(httpRequest -> {
                 httpRequest.setUrl(queryUrl);
-                httpRequest.setResponseHandler((status, stream) -> {
+                httpRequest.setResponseHandler(response -> {
+                    final InputStream stream = response.getStream();
                     final BufferedReader reader = new BufferedReader(new InputStreamReader(stream));
                     final DataFrame<String,YahooField> frame = createFrame(tickerMap.keySet(), fieldList);
                     final YahooContentProcessor processor = new YahooContentProcessor(fieldList, frame);
@@ -194,9 +194,9 @@ public class YahooQuoteLiveSource implements DataFrameSource<String,YahooField,Y
      * @param request   the request descriptor
      * @return          the apply of captured tickers
      */
-    private Map<String,String> appendTickers(StringBuilder url, YahooQuoteLiveOptions request) {
+    private Map<String,String> appendTickers(StringBuilder url, Options request) {
         url.append("s=");
-        final Set<String> tickers = request.getTickers();
+        final Set<String> tickers = request.tickers;
         final Map<String,String> tickerMap = new LinkedHashMap<>(tickers.size());
         final int length = url.length();
         tickers.forEach(ticker -> {
@@ -220,9 +220,9 @@ public class YahooQuoteLiveSource implements DataFrameSource<String,YahooField,Y
      * @param request   the request descriptor
      * @return          the list of fields
      */
-    private List<YahooField> appendFields(StringBuilder url, YahooQuoteLiveOptions request) {
+    private List<YahooField> appendFields(StringBuilder url, Options request) {
         url.append("&f=s");
-        final Set<YahooField> fields = request.getFields().size() > 0 ? request.getFields() : codeMap.keySet();
+        final Set<YahooField> fields = request.fields.size() > 0 ? request.fields : codeMap.keySet();
         final List<YahooField> fieldList = new ArrayList<>(fields.size());
         fields.forEach(field -> {
             final String code = codeMap.getOrDefault(field, null);
@@ -304,10 +304,64 @@ public class YahooQuoteLiveSource implements DataFrameSource<String,YahooField,Y
     }
 
 
+    /**
+     * The options for this DataFrameSource
+     */
+    public class Options implements DataFrameSource.Options<String,YahooField> {
+
+        private Set<String> tickers = new HashSet<>();
+        private Set<YahooField> fields = new HashSet<>();
+
+
+        @Override
+        public void validate() {
+            Asserts.check(tickers.size() > 0, "At least one ticker must be specified");
+        }
+
+        /**
+         * Sets the tickers for these options
+         * @param tickers   the tickers
+         */
+        public Options withTickers(Collection<String> tickers) {
+            this.tickers.addAll(tickers);
+            return this;
+        }
+
+        /**
+         * Sets the fields for these options
+         * @param fields    the fields
+         */
+        public Options withFields(Collection<YahooField> fields) {
+            this.fields.addAll(fields);
+            return this;
+        }
+
+        /**
+         * Sets the tickers for these options
+         * @param tickers   the tickers
+         */
+        public Options withTickers(String... tickers) {
+            this.tickers.addAll(Arrays.asList(tickers));
+            return this;
+        }
+
+        /**
+         * Sets the fields for these options
+         * @param fields    the fields
+         */
+        public Options withFields(YahooField... fields) {
+            this.fields.addAll(Arrays.asList(fields));
+            return this;
+        }
+
+    }
+
+
     public static void main(String[] args) {
         final Set<String> tickers = new HashSet<>(Arrays.asList("GBPUSD", "MSFT", "GOOG", "GOOGL", "ORCL", "FDX", "NFLX", "XXX", "GE", "GS", "ML", "UBS", "BLK"));
-        DataFrame.read().register(new YahooQuoteLiveSource());
-        DataFrame.read().apply(new YahooQuoteLiveOptions(tickers)).out().print();
+        final YahooQuoteLiveSource source = new YahooQuoteLiveSource();
+        final DataFrame<String,YahooField> frame = source.read(o -> o.withTickers(tickers));
+        frame.out().print();
     }
 
 }

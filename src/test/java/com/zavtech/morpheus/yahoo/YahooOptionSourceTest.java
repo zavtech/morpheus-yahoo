@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2014-2016 Xavier Witdouck
+ * Copyright (C) 2014-2017 Xavier Witdouck
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.zavtech.finance.yahoo;
+package com.zavtech.morpheus.yahoo;
 
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
@@ -23,6 +23,8 @@ import java.util.Set;
 
 import com.zavtech.morpheus.array.Array;
 import com.zavtech.morpheus.frame.DataFrame;
+import com.zavtech.morpheus.util.IO;
+
 import org.testng.Assert;
 import org.testng.annotations.DataProvider;
 import org.testng.annotations.Test;
@@ -34,22 +36,22 @@ import org.testng.annotations.Test;
  *
  * <p><strong>This is open source software released under the <a href="http://www.apache.org/licenses/LICENSE-2.0">Apache 2.0 License</a></strong></p>
  */
-public class YahooOptionQuoteTest {
+public class YahooOptionSourceTest {
 
     private Set<String> optionTypes = new HashSet<>(Arrays.asList("CALL", "PUT"));
     private Array<YahooField> fields = Array.of(
-            YahooField.TICKER,
-            YahooField.OPTION_TYPE,
-            YahooField.EXPIRY_DATE,
-            YahooField.PX_STRIKE,
-            YahooField.PX_LAST,
-            YahooField.PX_CHANGE,
-            YahooField.PX_CHANGE_PERCENT,
-            YahooField.PX_BID,
-            YahooField.PX_ASK,
-            YahooField.PX_VOLUME,
-            YahooField.OPEN_INTEREST,
-            YahooField.IMPLIED_VOLATILITY
+        YahooField.TICKER,
+        YahooField.OPTION_TYPE,
+        YahooField.EXPIRY_DATE,
+        YahooField.PX_STRIKE,
+        YahooField.PX_LAST,
+        YahooField.PX_CHANGE,
+        YahooField.PX_CHANGE_PERCENT,
+        YahooField.PX_BID,
+        YahooField.PX_ASK,
+        YahooField.PX_VOLUME,
+        YahooField.OPEN_INTEREST,
+        YahooField.IMPLIED_VOLATILITY
     );
 
 
@@ -60,9 +62,10 @@ public class YahooOptionQuoteTest {
 
 
     @Test(dataProvider = "tickers")
-    public void testOptionExiryDates(String ticker) {
+    public void testOptionExpiryDates(String ticker) {
         final YahooFinance yahoo = new YahooFinance();
         final Set<LocalDate> expiryDates = yahoo.getOptionExpiryDates(ticker);
+        IO.println("Expiry dates for " + ticker + " = " + expiryDates);
         Assert.assertTrue(expiryDates.size() > 0, "There are option expiries for " + ticker);
     }
 

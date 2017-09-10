@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2014-2016 Xavier Witdouck
+ * Copyright (C) 2014-2017 Xavier Witdouck
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,9 +13,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.zavtech.finance.yahoo;
+package com.zavtech.morpheus.yahoo;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -26,6 +27,7 @@ import java.util.Collections;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.function.Consumer;
 
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
@@ -37,77 +39,75 @@ import com.zavtech.morpheus.frame.DataFrame;
 import com.zavtech.morpheus.frame.DataFrameException;
 import com.zavtech.morpheus.frame.DataFrameSource;
 import com.zavtech.morpheus.index.Index;
+import com.zavtech.morpheus.util.Asserts;
+import com.zavtech.morpheus.util.Collect;
 import com.zavtech.morpheus.util.http.HttpClient;
 
 /**
- *
  * Any use of the extracted data from this software should adhere to Yahoo Finance Terms and Conditions.
  *
  * @author Xavier Witdouck
  *
  * <p><strong>This is open source software released under the <a href="http://www.apache.org/licenses/LICENSE-2.0">Apache 2.0 License</a></strong></p>
  */
-public class YahooOptionQuoteSource implements DataFrameSource<String,YahooField,YahooOptionQuoteOptions> {
+public class YahooOptionSource extends DataFrameSource<String,YahooField,YahooOptionSource.Options> {
 
     private String baseUrl;
     private String urlTemplate;
     private Array<YahooField> fields = Array.of(
-            YahooField.TICKER,
-            YahooField.OPTION_TYPE,
-            YahooField.EXPIRY_DATE,
-            YahooField.PX_STRIKE,
-            YahooField.PX_LAST,
-            YahooField.PX_CHANGE,
-            YahooField.PX_CHANGE_PERCENT,
-            YahooField.PX_BID,
-            YahooField.PX_ASK,
-            YahooField.PX_VOLUME,
-            YahooField.OPEN_INTEREST,
-            YahooField.IMPLIED_VOLATILITY
+        YahooField.TICKER,
+        YahooField.OPTION_TYPE,
+        YahooField.EXPIRY_DATE,
+        YahooField.PX_STRIKE,
+        YahooField.PX_LAST,
+        YahooField.PX_CHANGE,
+        YahooField.PX_CHANGE_PERCENT,
+        YahooField.PX_BID,
+        YahooField.PX_ASK,
+        YahooField.PX_VOLUME,
+        YahooField.OPEN_INTEREST,
+        YahooField.IMPLIED_VOLATILITY
     );
 
     /**
      * Constructor
      */
-    public YahooOptionQuoteSource() {
-        this("http://finance.yahoo.com/q/op?s=TICKER&date=EXPIRY");
+    public YahooOptionSource() {
+        this("https://finance.yahoo.com/quote/TICKER/options?p=TICKER&date=EXPIRY");
     }
 
     /**
      * Constructor
      * @param urlTemplate   the URL template for this source
      */
-    public YahooOptionQuoteSource(String urlTemplate) {
+    public YahooOptionSource(String urlTemplate) {
         this.urlTemplate = urlTemplate;
         this.baseUrl = urlTemplate.substring(0, urlTemplate.indexOf('/', 9));
     }
 
     @Override
-    public <T extends Options<?,?>> boolean isSupported(T options) {
-        return options instanceof YahooOptionQuoteOptions;
-    }
-
-    @Override
-    public DataFrame<String,YahooField> read(YahooOptionQuoteOptions options) throws DataFrameException {
+    public DataFrame<String, YahooField> read(Consumer<Options> configurator) throws DataFrameException {
+        final Options options = initOptions(new Options(), configurator);
         try {
             final DataFrame<String,YahooField> frame = createFrame(1000, fields);
-            final Set<LocalDate> expiryDates = Options.validate(options).getExpiry().map(Collections::singleton).orElse(getExpiryDates(options.getTicker()));
-            expiryDates.forEach(expiry -> {
+            final Set<LocalDate> expiryDates = options.getExpiry().map(Collections::singleton).orElse(getExpiryDates(options.underlying));
+            expiryDates.stream().parallel().forEach(expiry -> {
                 try {
                     final long epochMillis = ZonedDateTime.of(expiry, LocalTime.of(0,0,0,0), ZoneId.of("GMT")).toEpochSecond();
-                    final String url = urlTemplate.replace("TICKER", options.getTicker()).replace("EXPIRY", String.valueOf(epochMillis));
+                    final String url = urlTemplate.replace("TICKER", options.underlying).replace("EXPIRY", String.valueOf(epochMillis));
                     HttpClient.getDefault().doGet(httpRequest -> {
                         httpRequest.setUrl(url);
-                        httpRequest.setConnectTimeout(3000);
+                        httpRequest.setConnectTimeout(5000);
                         httpRequest.setRetryCount(3);
-                        httpRequest.setResponseHandler((status, stream) -> {
+                        httpRequest.setResponseHandler(response -> {
                             try {
-                                System.out.println("Loading " + httpRequest);
+                                System.out.println("Loading " + httpRequest.getUrl());
+                                final InputStream stream = response.getStream();
                                 final Document document = Jsoup.parse(stream, "UTF-8", "http://finance.yahoo.com");
-                                final Element calls = document.select("#optionsCallsTable").first().select("table.quote-table").first();
-                                final Element puts = document.select("#optionsPutsTable").first().select("table.quote-table").first();
-                                this.addOptions(options.getTicker(), expiry, calls, "CALL", frame);
-                                this.addOptions(options.getTicker(), expiry, puts, "PUT", frame);
+                                final Element calls = document.select("table.calls").first();
+                                final Element puts = document.select("table.puts").first();
+                                this.addOptions(options.underlying, expiry, calls, "CALL", frame);
+                                this.addOptions(options.underlying, expiry, puts, "PUT", frame);
                                 return Optional.empty();
                             } catch (IOException ex) {
                                 throw new RuntimeException("Failed to load DataFrame from URL: " + url, ex);
@@ -115,12 +115,12 @@ public class YahooOptionQuoteSource implements DataFrameSource<String,YahooField
                         });
                     });
                 } catch (Exception ex) {
-                    throw new DataFrameException("Failed to load option quote data from Yahoo Finance for: " + options.getTicker(), ex);
+                    throw new DataFrameException("Failed to load option quote data from Yahoo Finance for: " + options.underlying, ex);
                 }
             });
-            return frame;
+            return frame.rows().sort(true, Collect.asList(YahooField.OPTION_TYPE, YahooField.EXPIRY_DATE, YahooField.PX_STRIKE));
         } catch (Exception ex) {
-            throw new DataFrameException("Failed to load option quotes for " + options.getTicker(), ex);
+            throw new DataFrameException("Failed to load option quotes for " + options.underlying, ex);
         }
     }
 
@@ -152,21 +152,20 @@ public class YahooOptionQuoteSource implements DataFrameSource<String,YahooField
      */
     private void addOptions(String ticker, LocalDate expiry, Element table, String optionType, DataFrame<String,YahooField> frame) {
         try {
-            final YahooFinanceParser format = new YahooFinanceParser();
-            final Elements body = table.select("tbody");
-            body.select("tr").forEach(row -> {
-                final Elements cells = row.select("td");
-                if (cells.size() == 10) {
-                    final double strike = format.parseDouble(cells.get(0).select("a").text());
-                    final String symbol = cells.get(1).select("a").text();
-                    final double lastPrice = format.parseDouble(cells.get(2).select("div").text());
-                    final double bidPrice = format.parseDouble(cells.get(3).select("div").text());
-                    final double askPrice = format.parseDouble(cells.get(4).select("div").text());
-                    final double change = format.parseDouble(cells.get(5).select("div").text());
-                    final double changePercent = format.parseDouble(cells.get(6).select("div").text());
-                    final double volume = format.parseDouble(cells.get(7).select("strong").text());
-                    final double openInt = format.parseDouble(cells.get(8).select("div").text());
-                    final double impliedVol = format.parseDouble(cells.get(9).select("div").text());
+            synchronized (frame) {
+                final YahooFinanceParser format = new YahooFinanceParser();
+                final Elements body = table.select("tbody");
+                body.select("tr").forEach(row -> {
+                    final String symbol = extractValue(row.select("td.data-col0").first());
+                    final double strike = format.parseDouble(extractValue(row.select("td.data-col2").first()));
+                    final double lastPrice = format.parseDouble(extractValue(row.select("td.data-col3").first()));
+                    final double bidPrice = format.parseDouble(extractValue(row.select("td.data-col4").first()));
+                    final double askPrice = format.parseDouble(extractValue(row.select("td.data-col5").first()));
+                    final double change = format.parseDouble(extractValue(row.select("td.data-col6").first()));
+                    final double changePercent = format.parseDouble(extractValue(row.select("td.data-col7").first()));
+                    final double volume = format.parseDouble(extractValue(row.select("td.data-col8").first()));
+                    final double openInt = format.parseDouble(extractValue(row.select("td.data-col9").first()));
+                    final double impliedVol = format.parseDouble(extractValue(row.select("td.data-col10").first()));
                     if (frame.rows().add(symbol)) {
                         final int rowOrdinal = frame.rowCount()-1;
                         frame.data().setValue(rowOrdinal, YahooField.OPTION_TYPE, optionType);
@@ -182,12 +181,39 @@ public class YahooOptionQuoteSource implements DataFrameSource<String,YahooField
                         frame.data().setDouble(rowOrdinal, YahooField.OPEN_INTEREST, openInt);
                         frame.data().setDouble(rowOrdinal, YahooField.IMPLIED_VOLATILITY, impliedVol);
                     }
-                }
-            });
+                });
+            }
         } catch (Exception ex) {
             throw new RuntimeException("Failed to parse option data from Yahoo Finance", ex);
         }
     }
+
+
+    /**
+     * Method that extracts the ultimate value from a table cell
+     * @param td    the cell reference
+     * @return      the extracted value
+     */
+    private String extractValue(Element td) {
+        if (td == null) {
+            return null;
+        } else {
+            final String text = td.text();
+            if (text != null) {
+                return text;
+            }
+            final Elements children = td.children();
+            for (Element child : children) {
+                if (child.tagName().equalsIgnoreCase("a")) {
+                    return child.text();
+                } else if (child.tagName().equalsIgnoreCase("span")) {
+                    return child.text();
+                }
+            }
+            return null;
+        }
+    }
+
 
     /**
      * Returns the list of expiry dates for the underlying security ticker
@@ -201,10 +227,12 @@ public class YahooOptionQuoteSource implements DataFrameSource<String,YahooField
                 httpRequest.setUrl(url);
                 httpRequest.setConnectTimeout(5000);
                 httpRequest.setReadTimeout(10000);
-                httpRequest.setResponseHandler((status, stream) -> {
+                httpRequest.setResponseHandler(response -> {
                     try {
+                        final InputStream stream = response.getStream();
                         final Document document = Jsoup.parse(stream, "UTF-8", baseUrl);
-                        final Elements elements = document.select("select.Start-0").first().select("option");
+                        final Element div = document.select("div.option-contract-control").first();
+                        final Elements elements = div.select("select").first().select("option");
                         final Set<LocalDate> expiryDates = new TreeSet<>();
                         elements.forEach(element -> {
                             final String value = element.attr("value");
@@ -229,12 +257,58 @@ public class YahooOptionQuoteSource implements DataFrameSource<String,YahooField
     }
 
 
+    /**
+     * The options for this source
+     */
+    public class Options implements DataFrameSource.Options<String,YahooField> {
+
+        private String underlying;
+        private LocalDate expiry;
+
+        @Override
+        public void validate() {
+            Asserts.notNull(underlying, "The underlying ticker cannot be null");
+        }
+
+        /**
+         * Sets the ticker of the underlying security
+         * @param underlying    the underlying instrument ticker
+         * @return              these options
+         */
+        public Options withUnderlying(String underlying) {
+            this.underlying = underlying;
+            return this;
+        }
+
+        /**
+         * Sets a specific expiry, can be null to select all expiry dates
+         * @param expiry    the optional expiry date, null for all dates
+         * @return          these options
+         */
+        public Options withExpiry(LocalDate expiry) {
+            this.expiry = expiry;
+            return this;
+        }
+
+        /**
+         * Returns the optional expiry date
+         * @return  optional expiry
+         */
+        Optional<LocalDate> getExpiry() {
+            return Optional.ofNullable(expiry);
+        }
+    }
+
+
     public static void main(String[] args) {
-        DataFrame.read().register(new YahooOptionQuoteSource());
+        final YahooOptionSource source = new YahooOptionSource();
         final Array<String> tickers = Array.of("AAPL");
         tickers.forEach(ticker -> {
             final long t1 = System.currentTimeMillis();
-            final DataFrame<String,YahooField> frame = DataFrame.read().apply(new YahooOptionQuoteOptions(ticker, null));
+            final DataFrame<String,YahooField> frame = source.read(options -> {
+                options.withUnderlying(ticker);
+                options.withExpiry(LocalDate.of(2017, 10, 20));
+            });
             final long t2 = System.currentTimeMillis();
             System.out.println("Extracted table: " + frame + " in " + (t2 - t1) + " millis");
             frame.out().print();

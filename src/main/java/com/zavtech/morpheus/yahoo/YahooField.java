@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2014-2016 Xavier Witdouck
+ * Copyright (C) 2014-2017 Xavier Witdouck
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.zavtech.finance.yahoo;
+package com.zavtech.morpheus.yahoo;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -135,10 +135,12 @@ public class YahooField implements Comparable<YahooField>, java.io.Serializable 
     public static final YahooField SHARES_SHORT = create("SHARES_SHORT", Double.class);
     public static final YahooField SHARES_SHORT_RATIO = create("SHARES_SHORT_RATIO", Double.class);
     public static final YahooField SHARES_SHORT_PRIOR = create("SHARES_SHORT_PRIOR", Double.class);
+    public static final YahooField BETA = create("BETA", Double.class);
     public static final YahooField DIVIDEND_PAY_DATE = create("DIVIDEND_PAY_DATE", LocalDate.class);
-    public static final YahooField DIVIDEND_FWD_RATE = create("DIVIDEND_FWD_RATE", Double.class);
+    public static final YahooField DIVIDEND_FWD = create("DIVIDEND_FWD", Double.class);
     public static final YahooField DIVIDEND_FWD_YIELD = create("DIVIDEND_FWD_YIELD", Double.class);
-    public static final YahooField DIVIDEND_TRAIL_YIELD = create("DIVIDEND_TRAIL_YIELD", Double.class);
+    public static final YahooField DIVIDEND_TRAILING = create("DIVIDEND_TRAILING", Double.class);
+    public static final YahooField DIVIDEND_TRAILING_YIELD = create("DIVIDEND_TRAILING_YIELD", Double.class);
     public static final YahooField DIVIDEND_PAYOUT_RATIO = create("DIVIDEND_PAYOUT_RATIO", Double.class);
     public static final YahooField DIVIDEND_EX_DATE = create("DIVIDEND_EX_DATE", LocalDate.class);
     public static final YahooField LAST_SPLIT_DATE = create("LAST_SPLIT_DATE", LocalDate.class);
