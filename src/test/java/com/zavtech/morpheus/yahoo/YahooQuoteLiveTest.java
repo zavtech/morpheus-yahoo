@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2014-2016 Xavier Witdouck
+ * Copyright (C) 2014-2017 Xavier Witdouck
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.zavtech.finance.yahoo;
+package com.zavtech.morpheus.yahoo;
 
 import java.util.Arrays;
 import java.util.HashSet;
@@ -47,6 +47,7 @@ public class YahooQuoteLiveTest {
     @Test(dataProvider = "tickers")
     public void testLiveQuotesWithAllFields(List<String> tickers) {
         final DataFrame<String, YahooField> frame = yahoo.getLiveQuotes(new HashSet<>(tickers));
+        frame.out().print();
         final Set<YahooField> fields = new YahooQuoteLiveSource().getFieldSet();
         Assert.assertEquals(frame.rowCount(), tickers.size(), "There are rows in the frame");
         Assert.assertEquals(frame.colCount(), fields.size(), "There are columns in the frame");
@@ -59,6 +60,7 @@ public class YahooQuoteLiveTest {
     public void testLiveQuotesWithSubsetOfFields(List<String> tickers) {
         final YahooField[] fields = new YahooField[] { YahooField.PX_BID, YahooField.PX_BID_SIZE, YahooField.PX_ASK, YahooField.PX_ASK_SIZE };
         final DataFrame<String, YahooField> frame = yahoo.getLiveQuotes(new HashSet<>(tickers), fields);
+        frame.out().print();
         Assert.assertEquals(frame.rowCount(), tickers.size(), "There are rows in the frame");
         Assert.assertEquals(frame.colCount(), fields.length, "There are columns in the frame");
         Arrays.asList(fields).forEach(field -> Assert.assertTrue(frame.cols().contains(field), "The DataFrame contains column for " + field.getName()));
