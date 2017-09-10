@@ -4,12 +4,12 @@
 
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>com.zavtech</groupId>
-	<artifactId>morpheus-worldbank</artifactId>
-	<version>0.9.14</version>
+	<artifactId>morpheus-yahoo</artifactId>
+	<version>0.9.15</version>
 	<packaging>jar</packaging>
 
-	<name>Morpheus-Worldbank</name>
-	<description>The World Bank data adapter for Morpheus data science library</description>
+	<name>Morpheus-Yahoo</name>
+	<description>The Yahoo Finance adapter for Morpheus data science library</description>
 	<url>http://www.zavtech.com/morpheus/</url>
 
 	<inceptionYear>2014</inceptionYear>
