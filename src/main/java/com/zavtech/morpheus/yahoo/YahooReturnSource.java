@@ -18,7 +18,9 @@ package com.zavtech.morpheus.yahoo;
 import java.io.File;
 import java.time.LocalDate;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.Callable;
@@ -74,8 +76,14 @@ public class YahooReturnSource extends DataFrameSource<LocalDate,String,YahooRet
             final Options options = initOptions(new Options(), configurator);
             final List<Callable<DataFrame<LocalDate,String>>> tasks = createTasks(options);
             final List<Future<DataFrame<LocalDate,String>>> futures = executor.invokeAll(tasks);
-            final Stream<DataFrame<LocalDate,String>> frames = futures.stream().map(Try::get);
-            return DataFrame.combineFirst(frames).rows().sort(true);
+            final List<DataFrame<LocalDate,String>> frames = futures.stream().map(Try::get).collect(Collectors.toList());
+            final DataFrame<LocalDate,String> result = DataFrame.combineFirst(frames);
+            final DataFrame<LocalDate,String> returns = result.cols().select(options.tickers).rows().sort(true).copy();
+            if (options.emaHalfLife == null) {
+                return returns;
+            } else {
+                return returns.smooth(true).ema(options.emaHalfLife);
+            }
         } catch (YahooException ex) {
             throw ex;
         } catch (Exception ex) {
@@ -116,11 +124,9 @@ public class YahooReturnSource extends DataFrameSource<LocalDate,String,YahooRet
                         if (rowOrdinal == 0) {
                             return 0d;
                         } else {
-                            final LocalDate date = quotes.rows().key(rowOrdinal);
                             final double p0 = quotes.data().getDouble(rowOrdinal-1, YahooField.PX_CLOSE);
                             final double p1 = quotes.data().getDouble(rowOrdinal, YahooField.PX_CLOSE);
-                            final double result =  (p1 / p0) - 1d;
-                            return result;
+                            return p1 / p0 - 1d;
                         }
                     });
                 });
@@ -205,7 +211,7 @@ public class YahooReturnSource extends DataFrameSource<LocalDate,String,YahooRet
             options.withStartDate(request.startDate.minusDays(seedDays));
             options.withEndDate(request.endDate);
             options.withPaddedHolidays(false);
-            options.withAdjustForSplitsAndDividends(true);
+            options.withDividendAdjusted(true);
         });
     }
 
@@ -217,9 +223,10 @@ public class YahooReturnSource extends DataFrameSource<LocalDate,String,YahooRet
     public class Options implements DataFrameSource.Options<LocalDate,String> {
 
         private String type = "daily";
+        private Integer emaHalfLife;
         private LocalDate startDate;
         private LocalDate endDate = LocalDate.now();
-        private Set<String> tickers = new HashSet<>();
+        private Set<String> tickers = new LinkedHashSet<>();
 
         @Override
         public void validate() {
@@ -227,6 +234,9 @@ public class YahooReturnSource extends DataFrameSource<LocalDate,String,YahooRet
             Asserts.notNull(endDate != null, "A end date is required");
             Asserts.assertTrue(endDate.isAfter(startDate), "The start date must be < end date");
             Asserts.check(tickers.size() > 0, "At least one ticker must be specified");
+            if (emaHalfLife != null) {
+                Asserts.assertTrue(emaHalfLife >= 0, "The EWMA half life must be > 0");
+            }
         }
 
         /**
@@ -308,6 +318,7 @@ public class YahooReturnSource extends DataFrameSource<LocalDate,String,YahooRet
         /**
          * Sets the tickers for these options
          * @param tickers   the tickers
+         * @return          these options
          */
         public Options withTickers(String...tickers) {
             this.tickers.addAll(Arrays.asList(tickers));
@@ -317,9 +328,20 @@ public class YahooReturnSource extends DataFrameSource<LocalDate,String,YahooRet
         /**
          * Sets the tickers for these options
          * @param tickers   the tickers
+         * @return          these options
          */
         public Options withTickers(Iterable<String> tickers) {
             this.tickers.addAll(Collect.asList(tickers));
+            return this;
+        }
+
+        /**
+         * Sets the optional half life to apply exponential smoothing
+         * @param emaHalfLife   the optional EWMA half life, can be null for no smoothing
+         * @return              these options
+         */
+        public Options withEmaHalfLife(Integer emaHalfLife) {
+            this.emaHalfLife = emaHalfLife;
             return this;
         }
     }

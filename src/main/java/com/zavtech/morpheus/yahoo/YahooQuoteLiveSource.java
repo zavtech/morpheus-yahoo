@@ -26,6 +26,7 @@ import java.util.Collections;
 import java.util.Currency;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -42,6 +43,7 @@ import com.zavtech.morpheus.frame.DataFrame;
 import com.zavtech.morpheus.frame.DataFrameException;
 import com.zavtech.morpheus.frame.DataFrameSource;
 import com.zavtech.morpheus.util.Asserts;
+import com.zavtech.morpheus.util.Collect;
 import com.zavtech.morpheus.util.http.HttpClient;
 
 /**
@@ -309,8 +311,8 @@ public class YahooQuoteLiveSource extends DataFrameSource<String,YahooField,Yaho
      */
     public class Options implements DataFrameSource.Options<String,YahooField> {
 
-        private Set<String> tickers = new HashSet<>();
-        private Set<YahooField> fields = new HashSet<>();
+        private Set<String> tickers = new LinkedHashSet<>();
+        private Set<YahooField> fields = new LinkedHashSet<>();
 
 
         @Override
@@ -322,8 +324,8 @@ public class YahooQuoteLiveSource extends DataFrameSource<String,YahooField,Yaho
          * Sets the tickers for these options
          * @param tickers   the tickers
          */
-        public Options withTickers(Collection<String> tickers) {
-            this.tickers.addAll(tickers);
+        public Options withTickers(Iterable<String> tickers) {
+            this.tickers.addAll(Collect.asList(tickers));
             return this;
         }
 
@@ -331,8 +333,8 @@ public class YahooQuoteLiveSource extends DataFrameSource<String,YahooField,Yaho
          * Sets the fields for these options
          * @param fields    the fields
          */
-        public Options withFields(Collection<YahooField> fields) {
-            this.fields.addAll(fields);
+        public Options withFields(Iterable<YahooField> fields) {
+            this.fields.addAll(Collect.asList(fields));
             return this;
         }
 

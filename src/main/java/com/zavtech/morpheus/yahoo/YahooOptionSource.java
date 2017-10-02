@@ -153,35 +153,39 @@ public class YahooOptionSource extends DataFrameSource<String,YahooField,YahooOp
     private void addOptions(String ticker, LocalDate expiry, Element table, String optionType, DataFrame<String,YahooField> frame) {
         try {
             synchronized (frame) {
-                final YahooFinanceParser format = new YahooFinanceParser();
-                final Elements body = table.select("tbody");
-                body.select("tr").forEach(row -> {
-                    final String symbol = extractValue(row.select("td.data-col0").first());
-                    final double strike = format.parseDouble(extractValue(row.select("td.data-col2").first()));
-                    final double lastPrice = format.parseDouble(extractValue(row.select("td.data-col3").first()));
-                    final double bidPrice = format.parseDouble(extractValue(row.select("td.data-col4").first()));
-                    final double askPrice = format.parseDouble(extractValue(row.select("td.data-col5").first()));
-                    final double change = format.parseDouble(extractValue(row.select("td.data-col6").first()));
-                    final double changePercent = format.parseDouble(extractValue(row.select("td.data-col7").first()));
-                    final double volume = format.parseDouble(extractValue(row.select("td.data-col8").first()));
-                    final double openInt = format.parseDouble(extractValue(row.select("td.data-col9").first()));
-                    final double impliedVol = format.parseDouble(extractValue(row.select("td.data-col10").first()));
-                    if (frame.rows().add(symbol)) {
-                        final int rowOrdinal = frame.rowCount()-1;
-                        frame.data().setValue(rowOrdinal, YahooField.OPTION_TYPE, optionType);
-                        frame.data().setDouble(rowOrdinal, YahooField.PX_STRIKE, strike);
-                        frame.data().setValue(rowOrdinal, YahooField.TICKER, ticker);
-                        frame.data().setValue(rowOrdinal, YahooField.EXPIRY_DATE, expiry);
-                        frame.data().setDouble(rowOrdinal, YahooField.PX_LAST, lastPrice);
-                        frame.data().setDouble(rowOrdinal, YahooField.PX_BID, bidPrice);
-                        frame.data().setDouble(rowOrdinal, YahooField.PX_ASK, askPrice);
-                        frame.data().setDouble(rowOrdinal, YahooField.PX_CHANGE, change);
-                        frame.data().setDouble(rowOrdinal, YahooField.PX_CHANGE_PERCENT, changePercent);
-                        frame.data().setDouble(rowOrdinal, YahooField.PX_VOLUME, volume);
-                        frame.data().setDouble(rowOrdinal, YahooField.OPEN_INTEREST, openInt);
-                        frame.data().setDouble(rowOrdinal, YahooField.IMPLIED_VOLATILITY, impliedVol);
+                if (table != null) {
+                    final YahooFinanceParser format = new YahooFinanceParser();
+                    final Elements body = table.select("tbody");
+                    if (body != null) {
+                        body.select("tr").forEach(row -> {
+                            final String symbol = extractValue(row.select("td.data-col0").first());
+                            final double strike = format.parseDouble(extractValue(row.select("td.data-col2").first()));
+                            final double lastPrice = format.parseDouble(extractValue(row.select("td.data-col3").first()));
+                            final double bidPrice = format.parseDouble(extractValue(row.select("td.data-col4").first()));
+                            final double askPrice = format.parseDouble(extractValue(row.select("td.data-col5").first()));
+                            final double change = format.parseDouble(extractValue(row.select("td.data-col6").first()));
+                            final double changePercent = format.parseDouble(extractValue(row.select("td.data-col7").first()));
+                            final double volume = format.parseDouble(extractValue(row.select("td.data-col8").first()));
+                            final double openInt = format.parseDouble(extractValue(row.select("td.data-col9").first()));
+                            final double impliedVol = format.parseDouble(extractValue(row.select("td.data-col10").first()));
+                            if (frame.rows().add(symbol)) {
+                                final int rowOrdinal = frame.rowCount()-1;
+                                frame.data().setValue(rowOrdinal, YahooField.OPTION_TYPE, optionType);
+                                frame.data().setDouble(rowOrdinal, YahooField.PX_STRIKE, strike);
+                                frame.data().setValue(rowOrdinal, YahooField.TICKER, ticker);
+                                frame.data().setValue(rowOrdinal, YahooField.EXPIRY_DATE, expiry);
+                                frame.data().setDouble(rowOrdinal, YahooField.PX_LAST, lastPrice);
+                                frame.data().setDouble(rowOrdinal, YahooField.PX_BID, bidPrice);
+                                frame.data().setDouble(rowOrdinal, YahooField.PX_ASK, askPrice);
+                                frame.data().setDouble(rowOrdinal, YahooField.PX_CHANGE, change);
+                                frame.data().setDouble(rowOrdinal, YahooField.PX_CHANGE_PERCENT, changePercent);
+                                frame.data().setDouble(rowOrdinal, YahooField.PX_VOLUME, volume);
+                                frame.data().setDouble(rowOrdinal, YahooField.OPEN_INTEREST, openInt);
+                                frame.data().setDouble(rowOrdinal, YahooField.IMPLIED_VOLATILITY, impliedVol);
+                            }
+                        });
                     }
-                });
+                }
             }
         } catch (Exception ex) {
             throw new RuntimeException("Failed to parse option data from Yahoo Finance", ex);

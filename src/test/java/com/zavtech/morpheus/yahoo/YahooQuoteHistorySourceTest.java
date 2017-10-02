@@ -21,6 +21,7 @@ import java.util.stream.IntStream;
 import com.zavtech.morpheus.array.Array;
 import com.zavtech.morpheus.frame.DataFrame;
 import com.zavtech.morpheus.frame.DataFrameAsserts;
+import com.zavtech.morpheus.util.text.printer.Printer;
 
 import org.testng.Assert;
 import org.testng.annotations.DataProvider;
@@ -59,7 +60,7 @@ public class YahooQuoteHistorySourceTest {
         final LocalDate end = LocalDate.of(2015, 2, 4);
         final YahooFinance yahoo = new YahooFinance();
         System.out.println("Loading quotes for " + ticker);
-        final DataFrame<LocalDate,YahooField> quotes = yahoo.getEndOfDayQuotes(ticker, start, end, true);
+        final DataFrame<LocalDate,YahooField> quotes = yahoo.getQuoteBars(ticker, start, end, false);
         Assert.assertTrue(quotes.rowCount() > 0, "There are rows in the frame");
         Assert.assertTrue(quotes.colCount() > 0, "There are columns in the frame");
         fields.forEach(field -> Assert.assertTrue(quotes.cols().contains(field), "The DataFrame contains column for " + field.getName()));
@@ -89,14 +90,21 @@ public class YahooQuoteHistorySourceTest {
         });
         */
 
-        DataFrameAsserts.assertEqualsByIndex(quotes, DataFrame.read().<LocalDate>csv(options -> {
+        Array<YahooField> compare = Array.of(
+            YahooField.PX_OPEN,
+            YahooField.PX_HIGH,
+            YahooField.PX_LOW,
+            YahooField.PX_CLOSE
+        );
+
+        DataFrameAsserts.assertEqualsByIndex(quotes.cols().select(compare), DataFrame.read().<LocalDate>csv(options -> {
             options.setResource(String.format("/quotes/%s-quotes.csv", ticker.toLowerCase()));
             options.setRowKeyParser(LocalDate.class, values -> LocalDate.parse(values[0]));
             options.setExcludeColumnIndexes(0);
         }).cols().mapKeys(column -> {
             final String fieldName = column.key();
             return YahooField.getField(fieldName);
-        }));
+        }).cols().select(compare));
     }
 
 }

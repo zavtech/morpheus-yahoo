@@ -33,7 +33,7 @@ public class YahooFinanceParser {
 
     private static final Map<String,Integer> monthMap = new HashMap<>();
 
-    private Matcher numberMatcher1 = Pattern.compile("^\\+?(-?\\d*\\.?\\d*)([KMB]?)$", Pattern.CASE_INSENSITIVE).matcher("");
+    private Matcher numberMatcher1 = Pattern.compile("^\\+?(-?\\d*\\.?\\d*)([KMBT]?)$", Pattern.CASE_INSENSITIVE).matcher("");
     private Matcher numberMatcher2 = Pattern.compile("^\\+?(-?[\\d,]*\\.?\\d*)$", Pattern.CASE_INSENSITIVE).matcher("");
     private Matcher percentMatcher = Pattern.compile("^\\+?(-?\\d*\\.?\\d*)%$", Pattern.CASE_INSENSITIVE).matcher("");
     private Matcher dateMatcher1 = Pattern.compile("^([\\p{Alpha}]{3})\\s([0-9]{1,2})$", Pattern.CASE_INSENSITIVE).matcher("");
@@ -78,6 +78,7 @@ public class YahooFinanceParser {
                 else if (token2.equalsIgnoreCase("K")) return number * 1000d;
                 else if (token2.equalsIgnoreCase("M")) return number * 1000000d;
                 else if (token2.equalsIgnoreCase("B")) return number * 1000000000d;
+                else if (token2.equalsIgnoreCase("T")) return number * 1000000000000d;
                 else return number;
             } else if (numberMatcher2.reset(value.replace("," , "")).matches()) {
                 final String token = numberMatcher2.group(1);
