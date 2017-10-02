@@ -153,14 +153,14 @@ Large Blend and Fixed Income. The returns for these asset classes can be proxied
 of [Vanguard](https://investor.vanguard.com/home/), [BlackRock](https://www.blackrock.com/) or [State Street Global Advisors](https://www.ssga.com/home.html) 
 among others. For this example, let's use the following tickers.
 
-| Ticker | Name                                     | Provider                                                                    |
+| Ticker | Name                                     | Provider    |                                                               |
 |--------|------------------------------------------|-------------|---------------------------------------------------------------|
 | VWO    | Vanguard FTSE Emerging Markets ETF       | Vanguard    | [Details](https://finance.yahoo.com/quote/VWO/profile?p=VWO)  |   
 | VNQ    | Vanguard REIT ETF                        | Vanguard    | [Details](https://finance.yahoo.com/quote/VNQ/profile?p=VNQ)  |
 | VEA    | Vanguard FTSE Developed Markets ETF      | Vanguard    | [Details](https://finance.yahoo.com/quote/VEA/profile?p=VEA)  |
 | DBC    | PowerShares DB Commodity Tracking ETF    | Powershares | [Details](https://finance.yahoo.com/quote/DBC/profile?p=DBC)  |
 | VTI    | Vanguard Total Stock Market ETF          | Vanguard    | [Details](https://finance.yahoo.com/quote/DBC/profile?p=VTI)  |
-| BND    | Vanguard Total Bond Market ETF           | Vanguard    | [Details](https://finance.yahoo.com/quote/BND/profile?p=BND)   |
+| BND    | Vanguard Total Bond Market ETF           | Vanguard    | [Details](https://finance.yahoo.com/quote/BND/profile?p=BND)  |
  
 The code below demonstrates how to use the `YahooReturnSource` to calculate **cumulative returns** for these tickers including 
 the effect of any splits and dividend payments. To make the plot more user friendly, we re-label the columns as asset class 
