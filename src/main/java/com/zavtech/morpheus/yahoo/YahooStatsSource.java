@@ -130,6 +130,7 @@ public class YahooStatsSource extends DataFrameSource<String,YahooField,YahooSta
                 final String url = String.format(urlTemplate, ticker, ticker);
                 HttpClient.getDefault().doGet(httpRequest -> {
                     httpRequest.setUrl(url);
+                    httpRequest.getHeaders().putAll(YahooFinance.getRequestHeaders());
                     httpRequest.setResponseHandler(response -> {
                         try {
                             final long t1 = System.currentTimeMillis();

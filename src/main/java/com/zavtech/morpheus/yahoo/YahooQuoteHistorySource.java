@@ -18,6 +18,7 @@ package com.zavtech.morpheus.yahoo;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.HashMap;
@@ -83,6 +84,8 @@ public class YahooQuoteHistorySource extends DataFrameSource<LocalDate,YahooFiel
     );
 
     private String crumb;
+    private Duration connectTimeout;
+    private Duration readTimeout;
     private Map<String,String> cookies;
 
 
@@ -90,6 +93,17 @@ public class YahooQuoteHistorySource extends DataFrameSource<LocalDate,YahooFiel
      * Constructor
      */
     public YahooQuoteHistorySource() {
+        this(Duration.ofMillis(5000), Duration.ofMillis(15000));
+    }
+
+    /**
+     * Constructor
+     * @param connectTimeout    the http connect timeout
+     * @param readTimeout       the http read timeout
+     */
+    public YahooQuoteHistorySource(Duration connectTimeout, Duration readTimeout) {
+        this.connectTimeout = connectTimeout;
+        this.readTimeout = readTimeout;
         this.cookies = new HashMap<>();
     }
 
@@ -102,8 +116,8 @@ public class YahooQuoteHistorySource extends DataFrameSource<LocalDate,YahooFiel
             return HttpClient.getDefault().<DataFrame<LocalDate,YahooField>>doGet(httpRequest -> {
                 httpRequest.setUrl(url);
                 httpRequest.setRetryCount(2);
-                httpRequest.setReadTimeout(5000);
-                httpRequest.setConnectTimeout(2000);
+                httpRequest.setReadTimeout((int)readTimeout.getSeconds() * 1000);
+                httpRequest.setConnectTimeout((int)connectTimeout.getSeconds() * 1000);
                 httpRequest.getCookies().putAll(getCookies());
                 httpRequest.setResponseHandler(response -> {
                     if (response.getStatus().getCode() != 200) {
@@ -128,7 +142,7 @@ public class YahooQuoteHistorySource extends DataFrameSource<LocalDate,YahooFiel
                             final double closeAdj = Double.parseDouble(elements[5]);
                             final double volume = Double.parseDouble(elements[6]);
                             final double splitRatio = Math.abs(closeAdj - close) > 0.00001d ? closeAdj / close : 1d;
-                            final double adjustment = options.adjustForSplitsAndDividends ? splitRatio : 1d;
+                            final double adjustment = options.dividendAdjusted ? splitRatio : 1d;
                             if (options.paddedHolidays) {
                                 cursor.moveToRow(date);
                                 cursor.moveToColumn(0).setDouble(open * adjustment);
@@ -238,11 +252,11 @@ public class YahooQuoteHistorySource extends DataFrameSource<LocalDate,YahooFiel
      */
     private synchronized Map<String,String> getCookies() {
         if (cookies.isEmpty()) {
-            this.cookies = HttpClient.getDefault().<Map<String,String>>doGet(request -> {
-                request.setUrl(COOKIE_URL);
-                request.setConnectTimeout(5000);
-                request.setReadTimeout(10000);
-                request.setResponseHandler(response -> {
+            this.cookies = HttpClient.getDefault().<Map<String,String>>doGet(httpRequest -> {
+                httpRequest.setUrl(COOKIE_URL);
+                httpRequest.setReadTimeout((int)readTimeout.getSeconds() * 1000);
+                httpRequest.setConnectTimeout((int)connectTimeout.getSeconds() * 1000);
+                httpRequest.setResponseHandler(response -> {
                     final List<HttpHeader> headers = response.getHeaders();
                     final Map<String,String> cookies = new HashMap<>();
                     headers.forEach(header -> {
@@ -275,17 +289,17 @@ public class YahooQuoteHistorySource extends DataFrameSource<LocalDate,YahooFiel
     private synchronized String getCrumb() {
         if (crumb == null) {
             final Map<String,String> cookies = getCookies();
-            this.crumb = HttpClient.getDefault().<String>doGet(request -> {
-                request.setUrl(CRUMB_URL);
-                request.setConnectTimeout(5000);
-                request.setReadTimeout(10000);
-                request.getCookies().putAll(cookies);
-                request.setResponseHandler(response -> {
+            this.crumb = HttpClient.getDefault().<String>doGet(httpRequest -> {
+                httpRequest.setUrl(CRUMB_URL);
+                httpRequest.setReadTimeout((int)readTimeout.getSeconds() * 1000);
+                httpRequest.setConnectTimeout((int)connectTimeout.getSeconds() * 1000);
+                httpRequest.getCookies().putAll(cookies);
+                httpRequest.setResponseHandler(response -> {
                     try {
                         final String crumb = IO.readText(response.getStream());
                         return Optional.of(crumb.trim());
                     } catch (IOException ex) {
-                        throw new HttpException(request, "Failed to load data from url", ex);
+                        throw new HttpException(httpRequest, "Failed to load data from url", ex);
                     }
                 });
             }).orElseThrow(() -> new YahooException("Failed to initialize crumb token for historical quote request"));
@@ -303,7 +317,7 @@ public class YahooQuoteHistorySource extends DataFrameSource<LocalDate,YahooFiel
         private LocalDate startDate;
         private LocalDate endDate = LocalDate.now();
         private boolean paddedHolidays;
-        private boolean adjustForSplitsAndDividends;
+        private boolean dividendAdjusted;
 
         @Override
         public void validate() {
@@ -373,12 +387,12 @@ public class YahooQuoteHistorySource extends DataFrameSource<LocalDate,YahooFiel
         }
 
         /**
-         * Sets true if data should be adjusted for splits and dividends
-         * @param adjustForSplitsAndDividends   true to adjust for splits and dividends
-         * @return              these options
+         * Sets true if prices should be dividends
+         * @param dividendAdjusted   true if prices should be adjusted for dividends
+         * @return                  these options
          */
-        public Options withAdjustForSplitsAndDividends(boolean adjustForSplitsAndDividends) {
-            this.adjustForSplitsAndDividends = adjustForSplitsAndDividends;
+        public Options withDividendAdjusted(boolean dividendAdjusted) {
+            this.dividendAdjusted = dividendAdjusted;
             return this;
         }
     }
@@ -397,7 +411,7 @@ public class YahooQuoteHistorySource extends DataFrameSource<LocalDate,YahooFiel
                 options.withTicker(ticker);
                 options.withStartDate(start);
                 options.withEndDate(end);
-                options.withAdjustForSplitsAndDividends(true);
+                options.withDividendAdjusted(true);
             });
             frame.out().print();
         });

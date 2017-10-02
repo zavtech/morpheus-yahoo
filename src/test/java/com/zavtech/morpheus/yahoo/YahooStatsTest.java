@@ -44,7 +44,7 @@ public class YahooStatsTest {
     @Test(dataProvider = "tickers")
     public void testStatsRequest(List<String> tickers) {
         final YahooFinance yahoo = new YahooFinance();
-        final DataFrame<String,YahooField> frame = yahoo.getEquityStatistics(new HashSet<>(tickers));
+        final DataFrame<String,YahooField> frame = yahoo.getStatistics(new HashSet<>(tickers));
         final Array<YahooField> fields = new YahooStatsSource().getFields();
         Assert.assertEquals(frame.rowCount(), tickers.size(), "Frame has expected row count");
         Assert.assertEquals(frame.colCount(), fields.length(), "Frame has expected column count");

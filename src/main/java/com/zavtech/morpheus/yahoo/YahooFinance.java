@@ -16,10 +16,15 @@
 package com.zavtech.morpheus.yahoo;
 
 import java.time.LocalDate;
+import java.util.Map;
 import java.util.Set;
 
+import com.zavtech.morpheus.array.Array;
 import com.zavtech.morpheus.frame.DataFrame;
 import com.zavtech.morpheus.frame.DataFrameSource;
+import com.zavtech.morpheus.util.Collect;
+import com.zavtech.morpheus.util.text.SmartFormat;
+import com.zavtech.morpheus.util.text.printer.Printer;
 
 /**
  * A convenience class to expose a more specific API to request data from Yahoo Finance
@@ -31,7 +36,7 @@ import com.zavtech.morpheus.frame.DataFrameSource;
 public class YahooFinance {
 
     /**
-     * Static intializer
+     * Static initializer
      */
     static {
         DataFrameSource.register(new YahooOptionSource());
@@ -53,7 +58,19 @@ public class YahooFinance {
      * @param tickers   the set of security tickers
      * @return          the DataFrame of tickers
      */
-    public DataFrame<String,YahooField> getEquityStatistics(Set<String> tickers) {
+    public DataFrame<String,YahooField> getStatistics(Iterable<String> tickers) {
+        return DataFrameSource.lookup(YahooStatsSource.class).read(options -> {
+            options.withTickers(tickers);
+        });
+    }
+
+
+    /**
+     * Returns a DataFrame containing equity statistics for the set of tickers specified
+     * @param tickers   the set of security tickers
+     * @return          the DataFrame of tickers
+     */
+    public DataFrame<String,YahooField> getStatistics(String... tickers) {
         return DataFrameSource.lookup(YahooStatsSource.class).read(options -> {
             options.withTickers(tickers);
         });
@@ -114,6 +131,18 @@ public class YahooFinance {
      * @return          the frame of returns
      */
     public DataFrame<LocalDate,String> getDailyReturns(LocalDate start, LocalDate end, String...tickers) {
+        return getDailyReturns(start, end, Collect.asList(tickers));
+    }
+
+
+    /**
+     * Returns a DataFrame of daily returns
+     * @param start     the start date
+     * @param end       the end date
+     * @param tickers   the vector of tickers
+     * @return          the frame of returns
+     */
+    public DataFrame<LocalDate,String> getDailyReturns(LocalDate start, LocalDate end, Iterable<String> tickers) {
         return DataFrameSource.lookup(YahooReturnSource.class).read(options -> {
             options.withTickers(tickers);
             options.withStartDate(start);
@@ -130,7 +159,19 @@ public class YahooFinance {
      * @param tickers   the vector of tickers
      * @return          the frame of returns
      */
-    public DataFrame<LocalDate,String> getCumReturns(LocalDate start, LocalDate end, String...tickers) {
+    public DataFrame<LocalDate,String> getCumReturns(LocalDate start, LocalDate end, String... tickers) {
+        return getCumReturns(start, end, Collect.asList(tickers));
+    }
+
+
+    /**
+     * Returns a DataFrame of cumulative returns
+     * @param start     the start date
+     * @param end       the end date
+     * @param tickers   the vector of tickers
+     * @return          the frame of returns
+     */
+    public DataFrame<LocalDate,String> getCumReturns(LocalDate start, LocalDate end, Iterable<String> tickers) {
         return DataFrameSource.lookup(YahooReturnSource.class).read(options -> {
             options.withTickers(tickers);
             options.withStartDate(start);
@@ -139,16 +180,18 @@ public class YahooFinance {
         });
     }
 
+
     /**
      * Returns a DataFrame of live quotes for the tickers specified and all available fields
      * @param tickers   the set of security tickers
      * @return          the DataFrame of live quote data for all fields
      */
-    public DataFrame<String,YahooField> getLiveQuotes(Set<String> tickers) {
+    public DataFrame<String,YahooField> getLiveQuotes(Iterable<String> tickers) {
         return DataFrameSource.lookup(YahooQuoteLiveSource.class).read(options -> {
            options.withTickers(tickers);
         });
     }
+
 
     /**
      * Returns a DataFrame of live quotes for the tickers and fields specified
@@ -156,12 +199,27 @@ public class YahooFinance {
      * @param fields    the set of fields
      * @return          the DataFrame of live quote data for all fields
      */
-    public DataFrame<String,YahooField> getLiveQuotes(Set<String> tickers, YahooField... fields) {
+    public DataFrame<String,YahooField> getLiveQuotes(Iterable<String> tickers, YahooField... fields) {
         return DataFrameSource.lookup(YahooQuoteLiveSource.class).read(options -> {
             options.withTickers(tickers);
             options.withFields(fields);
         });
     }
+
+
+    /**
+     * Returns a DataFrame of live quotes for the tickers and fields specified
+     * @param tickers   the set of security tickers
+     * @param fields    the set of fields
+     * @return          the DataFrame of live quote data for all fields
+     */
+    public DataFrame<String,YahooField> getLiveQuotes(Iterable<String> tickers, Iterable<YahooField> fields) {
+        return DataFrameSource.lookup(YahooQuoteLiveSource.class).read(options -> {
+            options.withTickers(tickers);
+            options.withFields(fields);
+        });
+    }
+
 
     /**
      * Returns end of day OHLC quote bars for the security over the date range specified
@@ -171,12 +229,12 @@ public class YahooFinance {
      * @param adjusted      true to adjust prices for splits and dividends
      * @return              the DataFrame contains OHLC end of day bars
      */
-    public DataFrame<LocalDate,YahooField> getEndOfDayQuotes(String ticker, String start, String end, boolean adjusted) {
+    public DataFrame<LocalDate,YahooField> getQuoteBars(String ticker, String start, String end, boolean adjusted) {
         return DataFrameSource.lookup(YahooQuoteHistorySource.class).read(options -> {
             options.withTicker(ticker);
             options.withStartDate(LocalDate.parse(start));
             options.withEndDate(LocalDate.parse(end));
-            options.withAdjustForSplitsAndDividends(adjusted);
+            options.withDividendAdjusted(adjusted);
         });
     }
 
@@ -188,12 +246,30 @@ public class YahooFinance {
      * @param adjusted      true to adjust prices for splits and dividends
      * @return              the DataFrame contains OHLC end of day bars
      */
-    public DataFrame<LocalDate,YahooField> getEndOfDayQuotes(String ticker, LocalDate start, LocalDate end, boolean adjusted) {
+    public DataFrame<LocalDate,YahooField> getQuoteBars(String ticker, LocalDate start, LocalDate end, boolean adjusted) {
         return DataFrameSource.lookup(YahooQuoteHistorySource.class).read(options -> {
             options.withTicker(ticker);
             options.withStartDate(start);
             options.withEndDate(end);
-            options.withAdjustForSplitsAndDividends(adjusted);
+            options.withDividendAdjusted(adjusted);
+        });
+    }
+
+
+    /**
+     * Returns the standard set of headers to make us look like a browser
+     * @return      the standard set of request headers
+     */
+    static Map<String,String> getRequestHeaders() {
+        return Collect.asMap(map -> {
+            map.put("User-agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/60.0.3112.113 Safari/537.36");
+            map.put("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8");
+            map.put("Referer", "https://www.google.com/");
+            map.put("Accept-encoding", "gzip, deflate");
+            map.put("Accept-language", "en-US,en;q=0.8");
+            map.put("Host", "request.urih.com");
+            map.put("Cache-control", "max-age=259200");
+            map.put("Connection", "keep-alive");
         });
     }
 
