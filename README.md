@@ -221,11 +221,15 @@ The code below generates cumulative returns for the **S&P 500 Index** tracker wi
 and smooths the data with various half-lives, namely 0, 5, 10, 30 and 60 business days. A 0 day half-life is interpreted as 
 no smoothing, so this simply yields the raw data. The smoothed signal is computed as follows:
 
-$$ S_{t} = \alpha x_{t} + (1 - \alpha) S_{t-1} \\ for \\ t > 0 \\ and \\ where \\ S_{0} = x_{0} $$
+<p align="center">
+    <img class="chart" src="./images/equation-1.png"/>
+</p>
 
 There are various ways to compute \\( \alpha \\), but in Morpheus we calculate it based on a half-life as follows:
  
-$$ \alpha = 1 - e^{log(0.5) / halfLife} $$
+<p align="center">
+    <img class="chart" src="./images/equation-2.png"/>
+</p>
 
 <?prettify?>
 ```java
@@ -334,7 +338,9 @@ In the above example we leverage a function called `normal()` to generate a scal
 the plot to get a sense of how well the return histogram fits such a model. The code below simply generates a normal curve given 
 the mean, standard deviation of the daily returns, with an appropriate scale factor to fit the histogram.
 
-$$ f(x | \mu, \sigma^2) = \frac{1}{\sqrt{2 \pi \sigma^2}} e^{-\frac{(x - \mu)^2}{2 \sigma^2}} $$
+<p align="center">
+    <img class="chart" src="./images/equation-3.png"/>
+</p>
 
 <?prettify?>
 ```java
