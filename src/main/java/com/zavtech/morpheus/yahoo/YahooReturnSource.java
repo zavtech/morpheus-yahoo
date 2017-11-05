@@ -191,7 +191,7 @@ public class YahooReturnSource extends DataFrameSource<LocalDate,String,YahooRet
                     });
                 });
             } catch (Exception ex) {
-                throw new YahooException("Failed to load quote data from Yahoo Finance for " + ticker);
+                throw new YahooException("Failed to load quote data from Yahoo Finance for " + ticker, ex);
             }
         });
     }

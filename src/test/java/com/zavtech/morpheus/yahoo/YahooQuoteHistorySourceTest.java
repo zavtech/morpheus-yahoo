@@ -21,7 +21,6 @@ import java.util.stream.IntStream;
 import com.zavtech.morpheus.array.Array;
 import com.zavtech.morpheus.frame.DataFrame;
 import com.zavtech.morpheus.frame.DataFrameAsserts;
-import com.zavtech.morpheus.util.text.printer.Printer;
 
 import org.testng.Assert;
 import org.testng.annotations.DataProvider;
