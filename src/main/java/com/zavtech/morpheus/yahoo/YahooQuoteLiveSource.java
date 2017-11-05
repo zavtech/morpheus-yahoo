@@ -142,6 +142,7 @@ public class YahooQuoteLiveSource extends DataFrameSource<String,YahooField,Yaho
             final URL queryUrl = new URL(url.toString());
             return HttpClient.getDefault().<DataFrame<String,YahooField>>doGet(httpRequest -> {
                 httpRequest.setUrl(queryUrl);
+                httpRequest.getHeaders().putAll(YahooFinance.getRequestHeaders());
                 httpRequest.setResponseHandler(response -> {
                     final InputStream stream = response.getStream();
                     final BufferedReader reader = new BufferedReader(new InputStreamReader(stream));

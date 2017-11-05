@@ -15,6 +15,7 @@
  */
 package com.zavtech.morpheus.yahoo;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.time.Instant;
@@ -41,6 +42,8 @@ import com.zavtech.morpheus.frame.DataFrameSource;
 import com.zavtech.morpheus.index.Index;
 import com.zavtech.morpheus.util.Asserts;
 import com.zavtech.morpheus.util.Collect;
+import com.zavtech.morpheus.util.IO;
+import com.zavtech.morpheus.util.Parallel;
 import com.zavtech.morpheus.util.http.HttpClient;
 
 /**
@@ -231,22 +234,33 @@ public class YahooOptionSource extends DataFrameSource<String,YahooField,YahooOp
                 httpRequest.setUrl(url);
                 httpRequest.setConnectTimeout(5000);
                 httpRequest.setReadTimeout(10000);
+                httpRequest.getHeaders().putAll(YahooFinance.getRequestHeaders());
                 httpRequest.setResponseHandler(response -> {
                     try {
                         final InputStream stream = response.getStream();
                         final Document document = Jsoup.parse(stream, "UTF-8", baseUrl);
-                        final Element div = document.select("div.option-contract-control").first();
-                        final Elements elements = div.select("select").first().select("option");
+                        final Elements divs = document.select("div.option-contract-control");
                         final Set<LocalDate> expiryDates = new TreeSet<>();
-                        elements.forEach(element -> {
-                            final String value = element.attr("value");
-                            if (value != null) {
-                                final long epochSeconds = Long.parseLong(value);
-                                final Instant instant = Instant.ofEpochSecond(epochSeconds);
-                                final LocalDate expiryDate = LocalDateTime.ofInstant(instant, ZoneId.of("GMT")).toLocalDate();
-                                expiryDates.add(expiryDate);
-                            }
+                        divs.forEach(div -> {
+                            final Elements selects = div.select("select");
+                            selects.forEach(select -> {
+                                final Elements options = select.select("option");
+                                options.forEach(option -> {
+                                    final String value = option.attr("value");
+                                    if (value != null) {
+                                        final long epochSeconds = Long.parseLong(value);
+                                        final Instant instant = Instant.ofEpochSecond(epochSeconds);
+                                        final LocalDate expiryDate = LocalDateTime.ofInstant(instant, ZoneId.of("GMT")).toLocalDate();
+                                        expiryDates.add(expiryDate);
+                                    }
+                                });
+                            });
                         });
+                        if (expiryDates.isEmpty()) {
+                            document.outputSettings().prettyPrint();
+                            IO.writeText(document.outerHtml(), new File(ticker + "-OptionQuote.html"));
+                        }
+
                         return Optional.of(expiryDates);
                     } catch (IOException ex) {
                         throw new RuntimeException("Failed to load DataFrame from URL: " + url, ex);

@@ -113,6 +113,7 @@ public class YahooQuoteHistorySource extends DataFrameSource<LocalDate,YahooFiel
         final Options options = initOptions(new Options(), configurator);
         try {
             final URL url = createURL(options.ticker, options.startDate,options.endDate);
+            IO.println("Calling " + url);
             return HttpClient.getDefault().<DataFrame<LocalDate,YahooField>>doGet(httpRequest -> {
                 httpRequest.setUrl(url);
                 httpRequest.setRetryCount(2);
@@ -222,10 +223,14 @@ public class YahooQuoteHistorySource extends DataFrameSource<LocalDate,YahooFiel
      * @throws Exception    if url construction fails
      */
     private URL createURL(String symbol, LocalDate start, LocalDate end) throws Exception {
-        final String crumb = getCrumb();
-        final long startDate = start.atStartOfDay(ZoneOffset.UTC).toEpochSecond();
-        final long endDate = end.atStartOfDay(ZoneOffset.UTC).toEpochSecond();
-        return new URL(String.format(QUOTE_URL, symbol, startDate, endDate, crumb));
+        if (start.isAfter(end)) {
+            throw new IllegalArgumentException("The start date must be after the end date");
+        } else {
+            final String crumb = getCrumb();
+            final long startDate = start.atStartOfDay(ZoneOffset.UTC).toEpochSecond();
+            final long endDate = end.atStartOfDay(ZoneOffset.UTC).toEpochSecond();
+            return new URL(String.format(QUOTE_URL, symbol, startDate, endDate, crumb));
+        }
     }
 
     /**
@@ -256,6 +261,7 @@ public class YahooQuoteHistorySource extends DataFrameSource<LocalDate,YahooFiel
                 httpRequest.setUrl(COOKIE_URL);
                 httpRequest.setReadTimeout((int)readTimeout.getSeconds() * 1000);
                 httpRequest.setConnectTimeout((int)connectTimeout.getSeconds() * 1000);
+                httpRequest.getHeaders().putAll(YahooFinance.getRequestHeaders());
                 httpRequest.setResponseHandler(response -> {
                     final List<HttpHeader> headers = response.getHeaders();
                     final Map<String,String> cookies = new HashMap<>();

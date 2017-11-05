@@ -157,7 +157,7 @@ public class YahooExamples {
             chart.plot().axes().range(0).label().withText("Close Price");
             chart.title().withText(ticker + ": Adjusted & Unadjusted Close Prices");
             chart.legend().bottom();
-            chart.writerPng(new File("../morpheus-docs/docs/images/yahoo/nflx_prices_1.png"), 700, 400, true);
+            chart.writerPng(new File("../morpheus-docs/docs/images/yahoo/nflx_prices_1.png"), 700, 500, true);
             chart.show();
         });
     }

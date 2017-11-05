@@ -15,6 +15,7 @@
  */
 package com.zavtech.morpheus.yahoo;
 
+import java.net.Inet4Address;
 import java.time.LocalDate;
 import java.util.Map;
 import java.util.Set;
@@ -22,6 +23,7 @@ import java.util.Set;
 import com.zavtech.morpheus.array.Array;
 import com.zavtech.morpheus.frame.DataFrame;
 import com.zavtech.morpheus.frame.DataFrameSource;
+import com.zavtech.morpheus.range.Range;
 import com.zavtech.morpheus.util.Collect;
 import com.zavtech.morpheus.util.text.SmartFormat;
 import com.zavtech.morpheus.util.text.printer.Printer;
@@ -137,6 +139,17 @@ public class YahooFinance {
 
     /**
      * Returns a DataFrame of daily returns
+     * @param range     the date range
+     * @param tickers   the vector of tickers
+     * @return          the frame of returns
+     */
+    public DataFrame<LocalDate,String> getDailyReturns(Range<LocalDate> range, Iterable<String> tickers) {
+        return getDailyReturns(range.start(), range.end(), tickers);
+    }
+
+
+    /**
+     * Returns a DataFrame of daily returns
      * @param start     the start date
      * @param end       the end date
      * @param tickers   the vector of tickers
@@ -161,6 +174,17 @@ public class YahooFinance {
      */
     public DataFrame<LocalDate,String> getCumReturns(LocalDate start, LocalDate end, String... tickers) {
         return getCumReturns(start, end, Collect.asList(tickers));
+    }
+
+
+    /**
+     * Returns a DataFrame of cumulative returns
+     * @param range     the date range
+     * @param tickers   the vector of tickers
+     * @return          the frame of returns
+     */
+    public DataFrame<LocalDate,String> getCumReturns(Range<LocalDate> range, Iterable<String> tickers) {
+        return getCumReturns(range.start(), range.end(), tickers);
     }
 
 
@@ -262,14 +286,18 @@ public class YahooFinance {
      */
     static Map<String,String> getRequestHeaders() {
         return Collect.asMap(map -> {
-            map.put("User-agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/60.0.3112.113 Safari/537.36");
-            map.put("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8");
-            map.put("Referer", "https://www.google.com/");
-            map.put("Accept-encoding", "gzip, deflate");
-            map.put("Accept-language", "en-US,en;q=0.8");
-            map.put("Host", "request.urih.com");
-            map.put("Cache-control", "max-age=259200");
-            map.put("Connection", "keep-alive");
+            try {
+                map.put("User-agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/60.0.3112.113 Safari/537.36");
+                map.put("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8");
+                map.put("Referer", "https://www.google.com/");
+                map.put("Accept-encoding", "gzip, deflate");
+                map.put("Accept-language", "en-US,en;q=0.8");
+                map.put("Host", Inet4Address.getLocalHost().getHostName());
+                map.put("Cache-control", "max-age=259200");
+                map.put("Connection", "keep-alive");
+            } catch (Exception ex) {
+                throw new RuntimeException("Unable to resolve hostnane", ex);
+            }
         });
     }
 

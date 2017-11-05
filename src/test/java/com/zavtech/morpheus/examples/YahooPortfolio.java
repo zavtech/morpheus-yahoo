@@ -64,13 +64,14 @@ public class YahooPortfolio {
 
 
     /**
-     * A function that generates N long only random portfolios with weights the sum to 1
-     * @param count     the number of portfolios / rows in the DataFrame
-     * @param tickers   the security tickers to include
-     * @return          the frame of N random portfolios, 1 per row
+     * A function that generates N long only random portfolios with weights that sum to 1
+     * @param count     the number of portfolios / rows in the DataFrame, M
+     * @param tickers   the security tickers to include, size N
+     * @return          the frame of MxN random portfolios, 1 per row, labelled P0, P1 etc...
      */
-    DataFrame<Integer,String> randomPortfolios(int count, Iterable<String> tickers) {
-        DataFrame<Integer,String> weights = DataFrame.ofDoubles(Range.of(0, count), tickers);
+    static DataFrame<String,String> randomPortfolios(int count, Iterable<String> tickers) {
+        Range<String> rowKeys = Range.of(0, count).map(i -> "P" + i);
+        DataFrame<String,String> weights = DataFrame.ofDoubles(rowKeys, tickers);
         weights.applyDoubles(v -> Math.random());
         weights.rows().forEach(row -> {
             final double sum = row.stats().sum();
@@ -81,6 +82,64 @@ public class YahooPortfolio {
         });
         return weights;
     }
+
+
+    /**
+     * Calculates portfolio cumulative returns over a date range given a frame on initial weight configurations
+     * @param range         the date range for historical returns
+     * @param portfolios    MxN DataFrame of portfolio weights, M portfolios, N assets
+     * @return              the cumulative returns for each portfolio, TxM, portfolios labelled P0, P1 etc...
+     */
+    DataFrame<LocalDate,String> getEquityCurves(Range<LocalDate> range, DataFrame<String,String> portfolios) {
+        final YahooFinance yahoo = new YahooFinance();
+        final Iterable<String> tickers = portfolios.cols().keyArray();
+        final DataFrame<LocalDate,String> cumReturns = yahoo.getCumReturns(range.start(), range.end(), tickers);
+        final Range<String> colKeys = Range.of(0, portfolios.rowCount()).map(i -> "P" + i);
+        return DataFrame.ofDoubles(cumReturns.rows().keyArray(), colKeys, v -> {
+            double totalReturn = 0d;
+            for (int i=0; i<portfolios.colCount(); ++i) {
+                final double weight = portfolios.data().getDouble(v.colOrdinal(), i);
+                final double assetReturn = cumReturns.data().getDouble(v.rowOrdinal(), i);
+                totalReturn += (weight * assetReturn);
+            }
+            return totalReturn;
+        });
+    }
+
+
+    /**
+     * Returns a DataFrame containing risk, return and sharpe ratio for portfolios calculated over 1-year
+     * @param portfolios    the DataFrame of portfolio weights, one row per portfolio configuration
+     * @param endDate       the end date for the 1-year period to compute risk & return
+     * @param sharpe        if true, include a column with the Sharpe ratio for each portfolio
+     * @return              the DataFrame with risk, return and sharpe
+     */
+    DataFrame<String,String> calcRiskReturn(DataFrame<String,String> portfolios, LocalDate endDate, boolean sharpe) {
+        YahooFinance yahoo = new YahooFinance();
+        Array<String> tickers = portfolios.cols().keyArray();
+        Range<LocalDate> range = Range.of(endDate.minusYears(1), endDate);
+        DataFrame<LocalDate,String> dayReturns = yahoo.getDailyReturns(range, tickers);
+        DataFrame<LocalDate,String> cumReturns = yahoo.getCumReturns(range, tickers);
+        //Compute asset covariance matrix from daily returns and annualize
+        DataFrame<String,String> sigma = dayReturns.cols().stats().covariance().applyDoubles(x -> x.getDouble() * 252);
+        DataFrame<LocalDate,String> assetReturns = cumReturns.rows().last().map(DataFrameRow::toDataFrame).get();
+        //Prepare 3 column DataFrame to capture results
+        DataFrame<String,String>  riskReturn = DataFrame.ofDoubles(portfolios.rows().keyArray(),
+            sharpe ? Array.of("Risk", "Return", "Sharpe") : Array.of("Risk", "Return")
+        );
+        portfolios.rows().parallel().forEach(row -> {
+            DataFrame<String,String> weights = row.toDataFrame();
+            double portReturn = weights.dot(assetReturns.transpose()).data().getDouble(0, 0);
+            double portVariance = weights.dot(sigma).dot(weights.transpose()).data().getDouble(0, 0);
+            riskReturn.data().setDouble(row.key(), "Return", portReturn * 100d);
+            riskReturn.data().setDouble(row.key(), "Risk", Math.sqrt(portVariance) * 100d);
+            if (sharpe) {
+                riskReturn.data().setDouble(row.key(), "Sharpe", portReturn / Math.sqrt(portVariance));
+            }
+        });
+        return riskReturn;
+    }
+
 
 
     @Test
@@ -113,32 +172,14 @@ public class YahooPortfolio {
     public void riskReturnTradeOff() throws Exception {
         //Define portfolio count, investment horizon and universe
         int count = 10000;
-        LocalDate end = LocalDate.now();
-        LocalDate start = end.minusYears(1);
+        LocalDate endDate = LocalDate.now();
         Array<String> tickers = Array.of("AAPL", "AMZN");
-
-        //Grab daily returns and cumulative returns from Yahoo Finance
-        YahooFinance yahoo = new YahooFinance();
-        DataFrame<LocalDate,String> dayReturns = yahoo.getDailyReturns(start, end, tickers);
-        DataFrame<LocalDate,String> cumReturns = yahoo.getCumReturns(start, end, tickers);
-
-        //Compute asset covariance matrix from daily returns and annualize
-        DataFrame<String,String> sigma = dayReturns.cols().stats().covariance().applyDoubles(v -> v.getDouble() * 252);
-        DataFrame<LocalDate,String> assetReturns = cumReturns.rows().last().map(DataFrameRow::toDataFrame).get();
-
-        //Generate random portfolios and compute risk & return for each
-        DataFrame<Integer,String> portfolios = randomPortfolios(count, tickers);
-        DataFrame<Integer,String>  results = DataFrame.ofDoubles(Range.of(0, count), Array.of("Risk", "Return"));
-        portfolios.rows().forEach(row -> {
-            DataFrame<Integer,String> weights = row.toDataFrame();
-            double portReturn = weights.dot(assetReturns.transpose()).data().getDouble(0, 0);
-            double portVariance = weights.dot(sigma).dot(weights.transpose()).data().getDouble(0, 0);
-            results.data().setDouble(row.key(), "Return", portReturn * 100d);
-            results.data().setDouble(row.key(), "Risk", Math.sqrt(portVariance) * 100d);
-        });
-
-        //Plot the results using a scatter plot
-        Chart.create().withScatterPlot(results, false, "Risk", chart -> {
+        //Generate long only random portfolios
+        DataFrame<String,String> portfolios = randomPortfolios(count, tickers);
+        //Compute portfolio risk, return & Sharpe ratio
+        DataFrame<String,String> riskReturn = calcRiskReturn(portfolios, endDate, false);
+        //Plot the riskReturn using a scatter plot
+        Chart.create().withScatterPlot(riskReturn, false, "Risk", chart -> {
             chart.title().withText("Risk / Return Profiles For AAPL+AMZN Portfolios");
             chart.subtitle().withText(count + " Portfolio Combinations Simulated");
             chart.plot().axes().domain().label().withText("Portfolio Risk");
@@ -159,11 +200,9 @@ public class YahooPortfolio {
 
         //Define portfolio count, investment horizon
         int count = 10000;
-        LocalDate end = LocalDate.now();
-        LocalDate start = end.minusYears(1);
-        YahooFinance yahoo = new YahooFinance();
+        LocalDate endDate = LocalDate.now();
 
-        Array<DataFrame<Integer,String>> results = Array.of(
+        Array<DataFrame<String,String>> results = Array.of(
             Array.of("VTI", "BND"),
             Array.of("AAPL", "AMZN"),
             Array.of("GOOGL", "BND"),
@@ -172,28 +211,16 @@ public class YahooPortfolio {
         ).map(v -> {
             //Access tickers
             Array<String> tickers = v.getValue();
-            //Grab daily returns and cumulative returns from Yahoo Finance
-            DataFrame<LocalDate,String> dayReturns = yahoo.getDailyReturns(start, end, tickers);
-            DataFrame<LocalDate,String> cumReturns = yahoo.getCumReturns(start, end, tickers);
-            //Compute asset covariance matrix from daily returns and annualize
-            DataFrame<String,String> sigma = dayReturns.cols().stats().covariance().applyDoubles(x -> x.getDouble() * 252);
-            DataFrame<LocalDate,String> assetReturns = cumReturns.rows().last().map(DataFrameRow::toDataFrame).get();
-            //Generate random portfolios and compute risk & return for each
+            //Generate long only random portfolios
+            DataFrame<String,String> portfolios = randomPortfolios(count, tickers);
+            //Compute portfolio risk, return & Sharpe ratio
+            DataFrame<String,String> riskReturn = calcRiskReturn(portfolios, endDate, false);
+            //Re-label columns so that don't collide when we combine results
             String label = String.format("%s+%s", tickers.getValue(0), tickers.getValue(1));
-            DataFrame<Integer,String> portfolios = randomPortfolios(count, tickers);
-            DataFrame<Integer,String>  riskReturn = DataFrame.ofDoubles(Range.of(0, count), Array.of("Risk", label));
-            portfolios.rows().forEach(row -> {
-                DataFrame<Integer,String> weights = row.toDataFrame();
-                double portReturn = weights.dot(assetReturns.transpose()).data().getDouble(0, 0);
-                double portVariance = weights.dot(sigma).dot(weights.transpose()).data().getDouble(0, 0);
-                riskReturn.data().setDouble(row.key(), label, portReturn * 100d);
-                riskReturn.data().setDouble(row.key(), "Risk", Math.sqrt(portVariance) * 100d);
-            });
-
-            return riskReturn;
+            return riskReturn.cols().replaceKey("Return", label);
         });
 
-        DataFrame<Integer,String> first = results.getValue(0);
+        DataFrame<String,String> first = results.getValue(0);
         Chart.create().<Integer,String>withScatterPlot(first, false, "Risk", chart -> {
             for (int i=1; i<results.length(); ++i) {
                 chart.plot().<String>data().add(results.getValue(i), "Risk");
@@ -228,13 +255,10 @@ public class YahooPortfolio {
      */
     @Test()
     public void comparison2() throws Exception {
-        //Define portfolio count, investment horizon
-        int count = 10000;
-        LocalDate end = LocalDate.now();
-        LocalDate start = end.minusYears(1);
-        YahooFinance yahoo = new YahooFinance();
 
-        Array<DataFrame<Integer,String>> results = Array.of(
+        int count = 10000;
+        LocalDate endDate = LocalDate.of(2017, 9, 29);
+        Array<DataFrame<String,String>> results = Array.of(
             Array.of("VWO", "VNQ"),
             Array.of("VWO", "VNQ", "VEA"),
             Array.of("VWO", "VNQ", "VEA", "DBC"),
@@ -243,27 +267,16 @@ public class YahooPortfolio {
         ).map(v -> {
             //Access tickers
             Array<String> tickers = v.getValue();
-            //Grab daily returns and cumulative returns from Yahoo Finance
-            DataFrame<LocalDate,String> dayReturns = yahoo.getDailyReturns(start, end, tickers);
-            DataFrame<LocalDate,String> cumReturns = yahoo.getCumReturns(start, end, tickers);
-            //Compute asset covariance matrix from daily returns and annualize
-            DataFrame<String,String> sigma = dayReturns.cols().stats().covariance().applyDoubles(x -> x.getDouble() * 252);
-            DataFrame<LocalDate,String> assetReturns = cumReturns.rows().last().map(DataFrameRow::toDataFrame).get();
-            //Generate random portfolios and compute risk & return for each
+            //Generate long only random portfolios
+            DataFrame<String,String> portfolios = randomPortfolios(count, tickers);
+            //Compute portfolio risk, return & Sharpe ratio
+            DataFrame<String,String> riskReturn = calcRiskReturn(portfolios, endDate, false);
+            //Re-label columns so that don't collide when we combine results
             String label = String.format("%s Assets", tickers.length());
-            DataFrame<Integer,String> portfolios = randomPortfolios(count, tickers);
-            DataFrame<Integer,String>  riskReturn = DataFrame.ofDoubles(Range.of(0, count), Array.of("Risk", label));
-            portfolios.rows().forEach(row -> {
-                DataFrame<Integer,String> weights = row.toDataFrame();
-                double portReturn = weights.dot(assetReturns.transpose()).data().getDouble(0, 0);
-                double portVariance = weights.dot(sigma).dot(weights.transpose()).data().getDouble(0, 0);
-                riskReturn.data().setDouble(row.key(), 1, portReturn * 100d);
-                riskReturn.data().setDouble(row.key(), 0, Math.sqrt(portVariance) * 100d);
-            });
-            return riskReturn;
+            return riskReturn.cols().replaceKey("Return", label);
         });
 
-        DataFrame<Integer,String> first = results.getValue(0);
+        DataFrame<String,String> first = results.getValue(0);
         Chart.create().<Integer,String>withScatterPlot(first, false, "Risk", chart -> {
             for (int i=1; i<results.length(); ++i) {
                 chart.plot().<String>data().add(results.getValue(i), "Risk");
@@ -276,7 +289,7 @@ public class YahooPortfolio {
             chart.title().withText("Risk / Return Profiles of Portfolios With Increasing Assets");
             chart.subtitle().withText(count + " Portfolio Combinations Simulated");
             chart.legend().on().bottom();
-            chart.writerPng(new File("../morpheus-docs/docs/images/mpt/mpt_3.png"), 700, 400, true);
+            //chart.writerPng(new File("../morpheus-docs/docs/images/mpt/mpt_3.png"), 700, 400, true);
             chart.show();
         });
 
@@ -297,69 +310,47 @@ public class YahooPortfolio {
     @Test()
     public void wealthFront1() throws Exception {
         //Defines investment horizon & universe
-        LocalDate end = LocalDate.now();
-        LocalDate start = end.minusYears(1);
+        LocalDate endDate = LocalDate.of(2017, 9, 29);
         //Define investment universe and weights
         Array<String> tickers = Array.of("VTI", "VEA", "VWO", "VTEB", "VIG", "XLE");
         //Define DataFrame of position weights suggested by Wealthfront
         DataFrame<String,String> portfolio = DataFrame.of(tickers, String.class, columns -> {
             columns.add("Weights", Array.of(0.35d, 0.21d, 0.16d, 0.15d, 0.08d, 0.05d));
         });
-        //Grab daily returns and cumulative returns from Yahoo Finance
-        YahooFinance yahoo = new YahooFinance();
-        DataFrame<LocalDate,String> dayReturns = yahoo.getDailyReturns(start, end, tickers);
-        DataFrame<LocalDate,String> cumReturns = yahoo.getCumReturns(start, end, tickers);
-        //Compute asset covariance matrix from daily returns and annualize
-        DataFrame<String,String> sigma = dayReturns.cols().stats().covariance().applyDoubles(x -> x.getDouble() * 252);
-        DataFrame<LocalDate,String> assetReturns = cumReturns.rows().last().map(DataFrameRow::toDataFrame).get();
-        //Generate DataFrame of portfolio weights
-        double portReturn = portfolio.transpose().dot(assetReturns.transpose()).data().getDouble(0, 0);
-        double portVariance = portfolio.transpose().dot(sigma).dot(portfolio).data().getDouble(0, 0);
-        IO.println(String.format("Portfolio Return: %s", portReturn));
-        IO.println(String.format("Portfolio Risk: %s", Math.sqrt(portVariance)));
+        //Compute portfolio level risk and return
+        DataFrame<String,String> riskReturn = calcRiskReturn(portfolio.transpose(), endDate, false);
+        IO.println(String.format("Portfolio Return: %s", riskReturn.data().getDouble(0, "Return")));
+        IO.println(String.format("Portfolio Risk: %s", riskReturn.data().getDouble(0, "Risk")));
+
+        riskReturn.out().print();
     }
 
 
     @Test()
     public void wealthfront2() throws Exception {
-        //Define portfolio count, investment horizon and universe
         int count = 100000;
-        LocalDate end = LocalDate.now();
-        LocalDate start = end.minusYears(1);
+        LocalDate endDate = LocalDate.of(2017, 9, 29);
+        //Define asset universe of low cost ETFs
         Array<String> tickers = Array.of("VTI", "VEA", "VWO", "VTEB", "VIG", "XLE");
-
-        //Grab daily returns and cumulative returns from Yahoo Finance
-        YahooFinance yahoo = new YahooFinance();
-        DataFrame<LocalDate,String> dayReturns = yahoo.getDailyReturns(start, end, tickers);
-        DataFrame<LocalDate,String> cumReturns = yahoo.getCumReturns(start, end, tickers);
-
-        //Compute asset covariance matrix from daily returns and annualize
-        DataFrame<String,String> sigma = dayReturns.cols().stats().covariance().applyDoubles(v -> v.getDouble() * 252);
-        DataFrame<LocalDate,String> assetReturns = cumReturns.rows().last().map(DataFrameRow::toDataFrame).get();
-
-        //Generate random portfolios and compute risk & return for each
-        DataFrame<Integer,String> portfolios = randomPortfolios(count, tickers);
-        DataFrame<Integer,String>  results = DataFrame.ofDoubles(Range.of(0, count), Array.of("Risk", "Random"));
-        portfolios.rows().forEach(row -> {
-            DataFrame<Integer,String> weights = row.toDataFrame();
-            double portReturn = weights.dot(assetReturns.transpose()).data().getDouble(0, 0);
-            double portVariance = weights.dot(sigma).dot(weights.transpose()).data().getDouble(0, 0);
-            results.data().setDouble(row.key(), "Random", portReturn * 100d);
-            results.data().setDouble(row.key(), "Risk", Math.sqrt(portVariance) * 100d);
-        });
-
-        //Create DataFrame with risk / return of proposed Wealthfront portfolio
-        DataFrame<Integer,String> proposed = DataFrame.of(Range.of(0, 1), String.class, cols -> {
-            cols.add("Risk", Array.of(0.068950 * 100d));
-            cols.add("Chosen", Array.of(0.1587613 * 100d));
-        });
+        //Define the weights suggested by Robo-Advisor
+        Array<Double> weights = Array.of(0.35d, 0.21d, 0.16d, 0.15d, 0.08d, 0.05d);
+        //Generate long only random portfolios
+        DataFrame<String,String> portfolios = randomPortfolios(count, tickers);
+        //Apply proposed weights to first portfolio
+        portfolios.rowAt("P0").applyDoubles(v -> weights.getDouble(v.colOrdinal()));
+        //Compute portfolio risk, return & Sharpe ratio
+        DataFrame<String,String> riskReturn = calcRiskReturn(portfolios, endDate, false);
+        //Select row with risk / return of the proposed portfolio
+        DataFrame<String,String> chosen = riskReturn.rows().select("P0").cols().replaceKey("Return", "Chosen");
 
         //Plot the results using a scatter plot
-        Chart.create().withScatterPlot(results, false, "Risk", chart -> {
+        Chart.create().withScatterPlot(riskReturn.cols().replaceKey("Return", "Random"), false, "Risk", chart -> {
             chart.title().withText("Risk / Return Profile For Wealthfront Portfolio");
             chart.subtitle().withText(count + " Portfolio Combinations Simulated");
-            chart.plot().<String>data().add(proposed, "Risk");
-            chart.plot().render(1).withDots();
+            chart.plot().<String>data().add(chosen, "Risk");
+            chart.plot().render(1).withDots(10);
+            chart.plot().style("Chosen").withColor(Color.RED);
+            chart.plot().style("Random").withColor(Color.LIGHT_GRAY);
             chart.plot().axes().domain().label().withText("Portfolio Risk");
             chart.plot().axes().domain().format().withPattern("0.00'%';-0.00'%'");
             chart.plot().axes().range(0).label().withText("Portfolio Return");
@@ -529,15 +520,14 @@ public class YahooPortfolio {
 
     /**
      * Calculates portfolio position day returns over a date range given some starting weights
-     * @param start     the start date to evolve weights from
-     * @param end       the end date to evolve weights to
+     * @param range     the date range over which to compute day returns
      * @param initial   the initial weights at start date
      * @return          the evolving portfolio weights
      */
-    public DataFrame<LocalDate,String> getPortfolioDayReturns(LocalDate start, LocalDate end, Map<String,Double> initial) {
+    public DataFrame<LocalDate,String> getAssetDayReturns(Range<LocalDate> range, Map<String,Double> initial) {
         final YahooFinance yahoo = new YahooFinance();
         final List<String> tickers = initial.keySet().stream().collect(Collectors.toList());
-        final DataFrame<LocalDate,String> cumReturns = yahoo.getCumReturns(start, end, tickers);
+        final DataFrame<LocalDate,String> cumReturns = yahoo.getCumReturns(range, tickers);
         return cumReturns.copy().applyDoubles(v -> {
             final int rowOrdinal = v.rowOrdinal();
             if (rowOrdinal == 0) {
@@ -550,6 +540,29 @@ public class YahooPortfolio {
                 double priorWeight = initWeight * (1d + priorRet);
                 double currentWeight = initWeight * (1d + currentRet);
                 return currentWeight / priorWeight - 1d;
+            }
+        });
+    }
+
+
+    /**
+     * Returns portfolio daily returns over the date range specified
+     * @param range         the date range
+     * @param portfolios    the portfolio weights
+     * @return              the portfolio daily returns
+     */
+    public DataFrame<LocalDate,String> getPortfolioDayReturns(Range<LocalDate> range, DataFrame<String,String> portfolios) {
+        DataFrame<LocalDate,String> equityCurves = getEquityCurves(range, portfolios);
+        DataFrame<LocalDate,String> result = equityCurves.copy().applyDoubles(v -> Double.NaN);
+        return result.applyDoubles(v -> {
+            final int rowOrdinal = v.rowOrdinal();
+            if (rowOrdinal == 0) {
+                return 0d;
+            } else {
+                final int colOrdinal = v.colOrdinal();
+                final double ret0 = equityCurves.data().getDouble(rowOrdinal-1, colOrdinal);
+                final double ret1 = equityCurves.data().getDouble(rowOrdinal, colOrdinal);
+                return ((ret1 + 1d) / (ret0 + 1d)) - 1d;
             }
         });
     }
