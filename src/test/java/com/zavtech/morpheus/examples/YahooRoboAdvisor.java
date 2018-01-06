@@ -113,7 +113,7 @@ public class YahooRoboAdvisor extends YahooPortfolio {
         Array<String> tickers = Array.of("VTI", "VEA", "VWO", "VTEB", "VIG", "XLE");
         Array<Double> proposedWeights = Array.of(0.35d, 0.21d, 0.16d, 0.15d, 0.08d, 0.05d);
         DataFrame<String,String> portfolios = randomPortfolios(portfolioCount, tickers);
-        portfolios.rowAt("P0").applyDoubles(v -> proposedWeights.getDouble(v.colOrdinal()));
+        portfolios.row("P0").applyDoubles(v -> proposedWeights.getDouble(v.colOrdinal()));
         //Compute risk / return / sharpe for random portfolios
         DataFrame<String,String> riskReturn = calcRiskReturn(portfolios, endDate, true).rows().sort(false, "Sharpe");
         //Capture portfolio keys for chosen, best and worst portfolio based on sharpe

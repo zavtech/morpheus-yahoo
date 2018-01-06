@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (C) 2014-2017 Xavier Witdouck
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -100,14 +100,14 @@ public class YahooOptions {
         String ticker = "SPY";
         YahooFinance yahoo = new YahooFinance();
         DataFrame<String,YahooField> quotes = yahoo.getOptionQuotes(ticker);
-        Array<LocalDate> strikes = quotes.colAt(YahooField.EXPIRY_DATE).<LocalDate>distinct().sort(true);
+        Array<LocalDate> strikes = quotes.col(YahooField.EXPIRY_DATE).<LocalDate>distinct().sort(true);
         DataFrame<LocalDate,String> openInterest = DataFrame.ofDoubles(strikes, Array.of("CALL", "PUT"));
 
         quotes.rows().groupBy(YahooField.OPTION_TYPE, YahooField.EXPIRY_DATE).forEach(1, (key, group) -> {
             if (group.rowCount() > 0) {
                 String optionType = key.item(0);
                 LocalDate expiry = key.item(1);
-                double openInt = group.colAt(YahooField.OPEN_INTEREST).stats().sum();
+                double openInt = group.col(YahooField.OPEN_INTEREST).stats().sum();
                 openInterest.data().setDouble(expiry, optionType, openInt);
             }
         });
@@ -119,8 +119,8 @@ public class YahooOptions {
         });
 
         openInterest.out().print(100);
-        double mean = openInterest.colAt("P/C Ratio").stats().mean();
-        openInterest.colAt("P/C Ratio").applyDoubles(v -> v.getDouble() - mean);
+        double mean = openInterest.col("P/C Ratio").stats().mean();
+        openInterest.col("P/C Ratio").applyDoubles(v -> v.getDouble() - mean);
 
         DataFrame<String,String> data = openInterest.cols().select("P/C Ratio").rows().mapKeys(r -> r.key().toString());
         Chart.create().withBarPlot(data, false, chart -> {
@@ -157,7 +157,7 @@ public class YahooOptions {
         });
 
         //Select all distinct expiry dates for quotes
-        Array<LocalDate> expiryDates = options.colAt(YahooField.EXPIRY_DATE).distinct();
+        Array<LocalDate> expiryDates = options.col(YahooField.EXPIRY_DATE).distinct();
         //Creates frames for each expiry including only strike price and implied-vol columns
         Array<DataFrame<Integer,String>> frames = expiryDates.map(v -> {
             final LocalDate expiry = v.getValue();
@@ -166,8 +166,8 @@ public class YahooOptions {
                 return expiry.equals(date);
             });
             return DataFrame.of(Range.of(0, calls.rowCount()), String.class, columns -> {
-                columns.add("Strike", calls.colAt(YahooField.PX_STRIKE).toArray());
-                columns.add(expiry.toString(), calls.colAt(YahooField.IMPLIED_VOLATILITY).toArray().applyDoubles(x -> {
+                columns.add("Strike", calls.col(YahooField.PX_STRIKE).toArray());
+                columns.add(expiry.toString(), calls.col(YahooField.IMPLIED_VOLATILITY).toArray().applyDoubles(x -> {
                     return x.getDouble() * 100d;
                 }));
             });
@@ -215,7 +215,7 @@ public class YahooOptions {
         });
 
         //Select all distinct expiry dates for quotes
-        Array<LocalDate> expiryDates = options.colAt(YahooField.EXPIRY_DATE).distinct();
+        Array<LocalDate> expiryDates = options.col(YahooField.EXPIRY_DATE).distinct();
         //Creates frames for each expiry including only strike price and implied-vol columns
         Array<DataFrame<Integer,String>> frames = expiryDates.map(v -> {
             final LocalDate expiry = v.getValue();
@@ -224,8 +224,8 @@ public class YahooOptions {
                 return expiry.equals(date);
             });
             return DataFrame.of(Range.of(0, calls.rowCount()), String.class, columns -> {
-                columns.add("Strike", calls.colAt(YahooField.PX_STRIKE).toArray());
-                columns.add(expiry.toString(), calls.colAt(YahooField.IMPLIED_VOLATILITY).toArray().applyDoubles(x -> {
+                columns.add("Strike", calls.col(YahooField.PX_STRIKE).toArray());
+                columns.add(expiry.toString(), calls.col(YahooField.IMPLIED_VOLATILITY).toArray().applyDoubles(x -> {
                     return x.getDouble() * 100d;
                 }));
             });

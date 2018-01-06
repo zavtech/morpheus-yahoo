@@ -337,7 +337,7 @@ public class YahooPortfolio {
         //Generate long only random portfolios
         DataFrame<String,String> portfolios = randomPortfolios(count, tickers);
         //Apply proposed weights to first portfolio
-        portfolios.rowAt("P0").applyDoubles(v -> weights.getDouble(v.colOrdinal()));
+        portfolios.row("P0").applyDoubles(v -> weights.getDouble(v.colOrdinal()));
         //Compute portfolio risk, return & Sharpe ratio
         DataFrame<String,String> riskReturn = calcRiskReturn(portfolios, endDate, false);
         //Select row with risk / return of the proposed portfolio

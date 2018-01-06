@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (C) 2014-2017 Xavier Witdouck
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -145,13 +145,13 @@ public class YahooQuoteHistorySource extends DataFrameSource<LocalDate,YahooFiel
                             final double splitRatio = Math.abs(closeAdj - close) > 0.00001d ? closeAdj / close : 1d;
                             final double adjustment = options.dividendAdjusted ? splitRatio : 1d;
                             if (options.paddedHolidays) {
-                                cursor.moveToRow(date);
-                                cursor.moveToColumn(0).setDouble(open * adjustment);
-                                cursor.moveToColumn(1).setDouble(high * adjustment);
-                                cursor.moveToColumn(2).setDouble(low * adjustment);
-                                cursor.moveToColumn(3).setDouble(close * adjustment);
-                                cursor.moveToColumn(4).setDouble(volume);
-                                cursor.moveToColumn(5).setDouble(splitRatio);
+                                cursor.atRowKey(date);
+                                cursor.atColOrdinal(0).setDouble(open * adjustment);
+                                cursor.atColOrdinal(1).setDouble(high * adjustment);
+                                cursor.atColOrdinal(2).setDouble(low * adjustment);
+                                cursor.atColOrdinal(3).setDouble(close * adjustment);
+                                cursor.atColOrdinal(4).setDouble(volume);
+                                cursor.atColOrdinal(5).setDouble(splitRatio);
                             } else {
                                 frame.rows().add(date, v -> {
                                     switch (v.colOrdinal()) {
