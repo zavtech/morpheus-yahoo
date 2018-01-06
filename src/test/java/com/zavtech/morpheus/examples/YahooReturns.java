@@ -168,8 +168,8 @@ public class YahooReturns {
         });
 
         double sigmaCount = -6d;
-        double mean = returns.colAt("SPY").stats().mean();
-        double stdDev = returns.colAt("SPY").stats().stdDev();
+        double mean = returns.col("SPY").stats().mean();
+        double stdDev = returns.col("SPY").stats().stdDev();
         NormalDistribution dist = new NormalDistribution(mean, stdDev);
         double probability = dist.cumulativeProbability(stdDev * sigmaCount);
 

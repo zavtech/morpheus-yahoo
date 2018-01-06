@@ -57,8 +57,8 @@ public class YahooParityPortfolios extends YahooPortfolio {
         //Generate long only random portfolios
         DataFrame<String,String> portfolios = randomPortfolios(count, tickers);
         //Apply proposed robo & equal weights to first & second portfolio
-        portfolios.rowAt("P0").applyDoubles(v -> roboWeights.getDouble(v.colOrdinal()));
-        portfolios.rowAt("P1").applyDoubles(v -> equalWeights.getDouble(v.colOrdinal()));
+        portfolios.row("P0").applyDoubles(v -> roboWeights.getDouble(v.colOrdinal()));
+        portfolios.row("P1").applyDoubles(v -> equalWeights.getDouble(v.colOrdinal()));
         //Compute portfolio risk, return & Sharpe ratio
         DataFrame<String,String> riskReturn = calcRiskReturn(portfolios, endDate, false);
         //Select row with risk / return of test portfolios

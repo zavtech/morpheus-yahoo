@@ -78,7 +78,7 @@ public class YahooPortfolio_60_40 extends YahooPortfolio {
         //Generate long only random portfolios
         DataFrame<String,String> portfolios = randomPortfolios(count, tickers);
         //Apply proposed weights to first portfolio
-        portfolios.rowAt("P0").applyDoubles(v -> weights.getDouble(v.colOrdinal()));
+        portfolios.row("P0").applyDoubles(v -> weights.getDouble(v.colOrdinal()));
         //Compute portfolio risk, return & Sharpe ratio
         DataFrame<String,String> riskReturn = calcRiskReturn(portfolios, endDate, false);
         //Select row with risk / return of the proposed portfolio
@@ -140,7 +140,7 @@ public class YahooPortfolio_60_40 extends YahooPortfolio {
         Array<String> tickers = Array.of("VTI", "BND");
         Array<Double> proposedWeights = Array.of(0.6d, 0.4d);
         DataFrame<String,String> portfolios = randomPortfolios(portfolioCount, tickers);
-        portfolios.rowAt("P0").applyDoubles(v -> proposedWeights.getDouble(v.colOrdinal()));
+        portfolios.row("P0").applyDoubles(v -> proposedWeights.getDouble(v.colOrdinal()));
         //Compute risk / return / sharpe for random portfolios
         DataFrame<String,String> riskReturn = calcRiskReturn(portfolios, endDate, true).rows().sort(false, "Sharpe");
         //Capture portfolio keys for chosen, best and worst portfolio based on sharpe
@@ -266,8 +266,8 @@ public class YahooPortfolio_60_40 extends YahooPortfolio {
 
 
     public void computeStats(DataFrame<?,String> combined) {
-        double returnValue = combined.colAt("Mean").last(v -> true).get().getDouble() / 100d;
-        Array<Double> values = Array.of(combined.colAt("Mean").toDoubleStream().map(v -> 100 * (1d + v / 100d)).toArray());
+        double returnValue = combined.col("Mean").last(v -> true).get().getDouble() / 100d;
+        Array<Double> values = Array.of(combined.col("Mean").toDoubleStream().map(v -> 100 * (1d + v / 100d)).toArray());
         Array<Double> returns = values.map(v -> {
             switch (v.index()) {
                 case 0: return 0d;

@@ -51,7 +51,7 @@ public class YahooStatsTest {
         tickers.forEach(ticker -> Assert.assertTrue(frame.rows().contains(ticker), "Frame contains row for " + ticker));
         fields.forEach(field -> Assert.assertTrue(frame.cols().contains(field), "Frame contains column for " + field));
         frame.out().print();
-        frame.rowAt("XXX").forEachValue(v -> {
+        frame.row("XXX").forEachValue(v -> {
             final Object value = v.getValue();
             if (value instanceof Number) {
                 Assert.assertEquals(((Number)value).doubleValue(), Double.NaN);
