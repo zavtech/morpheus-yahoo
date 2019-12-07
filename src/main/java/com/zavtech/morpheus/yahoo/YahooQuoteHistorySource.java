@@ -389,8 +389,8 @@ public class YahooQuoteHistorySource extends DataFrameSource<LocalDate,YahooFiel
         final String brazilianStock = "MGLU3.sa";
         System.out.printf("%n%s quotes from %s to %s%n", brazilianStock, start, end);
         final YahooFinance yahoo = new YahooFinance();
-        final DataFrame<LocalDate, String> returns = yahoo.getDailyReturns(start, end, Array.of(brazilianStock));
-        returns.out().print();
+        final DataFrame<LocalDate, String> returns = yahoo.getDailyReturns(start, end, Array.of(brazilianStock, "BID3.sa", "ITUB4.sa"));
+        returns.out().print(returns.rowCount());
         System.out.println();
 
         final Array<String> tickers = Array.of("AAPL", "MSFT", "ORCL", "GE", "C");
