@@ -23,10 +23,7 @@ import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.concurrent.Callable;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
+import java.util.concurrent.*;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -76,9 +73,9 @@ public class YahooReturnSource extends DataFrameSource<LocalDate,String,YahooRet
             final Options options = initOptions(new Options(), configurator);
             final List<Callable<DataFrame<LocalDate,String>>> tasks = createTasks(options);
             final List<Future<DataFrame<LocalDate,String>>> futures = executor.invokeAll(tasks);
-            final List<DataFrame<LocalDate,String>> frames = futures.stream().map(Try::get).collect(Collectors.toList());
+            final List<DataFrame<LocalDate,String>> frames = futures.stream().map(this::futureGet).filter(f -> !f.isEmpty()).collect(Collectors.toList());
             final DataFrame<LocalDate,String> result = DataFrame.combineFirst(frames);
-            final DataFrame<LocalDate,String> returns = result.cols().select(options.tickers).rows().sort(true).copy();
+            final DataFrame<LocalDate,String> returns = result.cols().select(col -> options.tickers.contains(col.key())).rows().sort(true).copy();
             if (options.emaHalfLife == null) {
                 return returns;
             } else {
@@ -91,6 +88,13 @@ public class YahooReturnSource extends DataFrameSource<LocalDate,String,YahooRet
         }
     }
 
+    private DataFrame<LocalDate, String> futureGet(final Future<DataFrame<LocalDate, String>> future) {
+        try {
+            return future.get();
+        } catch (Exception e) {
+            return DataFrame.empty();
+        }
+    }
 
     /**
      * Returns the list of tasks for the request specified

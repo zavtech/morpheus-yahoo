@@ -16,7 +16,6 @@
 package com.zavtech.morpheus.yahoo;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.net.URL;
 import java.time.Duration;
 import java.time.LocalDate;
@@ -40,10 +39,11 @@ import com.zavtech.morpheus.index.Index;
 import com.zavtech.morpheus.range.Range;
 import com.zavtech.morpheus.util.Asserts;
 import com.zavtech.morpheus.util.IO;
-import com.zavtech.morpheus.util.TextStreamReader;
 import com.zavtech.morpheus.util.http.HttpClient;
 import com.zavtech.morpheus.util.http.HttpException;
 import com.zavtech.morpheus.util.http.HttpHeader;
+
+import static com.zavtech.morpheus.yahoo.YahooIndicatorsJsonParser.Indicator;
 
 /**
  * A DataFrameSource implementation that loads historical quote data from Yahoo Finance using their CSV API.
@@ -58,7 +58,7 @@ public class YahooQuoteHistorySource extends DataFrameSource<LocalDate,YahooFiel
 
     private static final String CRUMB_URL = "https://query1.finance.yahoo.com/v1/test/getcrumb";
     private static final String COOKIE_URL = "https://finance.yahoo.com/quote/SPY?p=SPY";
-    private static final String QUOTE_URL = "https://query1.finance.yahoo.com/v7/finance/download/%s?period1=%d&period2=%d&interval=1d&events=history&crumb=%s";
+    private static final String QUOTE_URL = "https://query1.finance.yahoo.com/v8/finance/chart/%s?period1=%d&period2=%d&interval=1d&events=history&crumb=%s";
 
     private static Predicate<LocalDate> weekdayPredicate = date -> {
         if (date == null) {
@@ -125,23 +125,20 @@ public class YahooQuoteHistorySource extends DataFrameSource<LocalDate,YahooFiel
                         final int code = response.getStatus().getCode();
                         throw new HttpException(httpRequest, "Yahoo Finance responded with status code " + code, null);
                     } else {
-                        final InputStream stream = response.getStream();
-                        final TextStreamReader reader = new TextStreamReader(stream);
-                        if (reader.hasNext()) reader.nextLine(); //Swallow the header
+                        final YahooIndicatorsJsonParser indicators = new YahooIndicatorsJsonParser(response.getStream());
                         final Index<LocalDate> rowKeys = createDateIndex(options);
                         final Index<YahooField> colKeys = Index.of(fields.copy());
                         final DataFrame<LocalDate,YahooField> frame = DataFrame.ofDoubles(rowKeys, colKeys);
                         final DataFrameCursor<LocalDate,YahooField> cursor = frame.cursor();
-                        while (reader.hasNext()) {
-                            final String line = reader.nextLine();
-                            final String[] elements = line.split(",");
-                            final LocalDate date = parseDate(elements[0]);
-                            final double open = Double.parseDouble(elements[1]);
-                            final double high = Double.parseDouble(elements[2]);
-                            final double low = Double.parseDouble(elements[3]);
-                            final double close = Double.parseDouble(elements[4]);
-                            final double closeAdj = Double.parseDouble(elements[5]);
-                            final double volume = Double.parseDouble(elements[6]);
+                        for (int i = 0; i < indicators.rows(); i++) {
+                            final LocalDate date = indicators.getDate(i);
+                            final double open = indicators.getQuote(Indicator.OPEN, i);
+                            final double high = indicators.getQuote(Indicator.HIGH, i);
+                            final double low = indicators.getQuote(Indicator.LOW, i);
+                            final double close = indicators.getQuote(Indicator.CLOSE, i);
+                            final double closeAdj = indicators.getQuote(Indicator.ADJCLOSE, i);
+
+                            final double volume = indicators.getQuote(Indicator.VOLUME, i);
                             final double splitRatio = Math.abs(closeAdj - close) > 0.00001d ? closeAdj / close : 1d;
                             final double adjustment = options.dividendAdjusted ? splitRatio : 1d;
                             if (options.paddedHolidays) {
@@ -169,6 +166,7 @@ public class YahooQuoteHistorySource extends DataFrameSource<LocalDate,YahooFiel
                         if (options.paddedHolidays) {
                             frame.fill().down(2);
                         }
+
                         calculateChanges(frame);
                         return Optional.of(frame);
                     }
@@ -180,7 +178,6 @@ public class YahooQuoteHistorySource extends DataFrameSource<LocalDate,YahooFiel
             throw new DataFrameException("Market Data query failed for asset " +  options.ticker, ex);
         }
     }
-
 
     /**
      * Returns the date index to initialize the row axis
@@ -230,23 +227,6 @@ public class YahooQuoteHistorySource extends DataFrameSource<LocalDate,YahooFiel
             final long startDate = start.atStartOfDay(ZoneOffset.UTC).toEpochSecond();
             final long endDate = end.atStartOfDay(ZoneOffset.UTC).toEpochSecond();
             return new URL(String.format(QUOTE_URL, symbol, startDate, endDate, crumb));
-        }
-    }
-
-    /**
-     * Parses dates in the formatSqlDate YYYY-MM-DD
-     * @param dateString    the string to parse
-     * @return  the parsed date value
-     */
-    private LocalDate parseDate(String dateString) {
-        if (dateString == null) {
-            return null;
-        } else {
-            final String[] elements = dateString.trim().split("-");
-            final int year = Integer.parseInt(elements[0]);
-            final int month = Integer.parseInt(elements[1]);
-            final int date = Integer.parseInt(elements[2]);
-            return LocalDate.of(year, month, date);
         }
     }
 
@@ -403,11 +383,16 @@ public class YahooQuoteHistorySource extends DataFrameSource<LocalDate,YahooFiel
         }
     }
 
-
-
     public static void main(String[] args) {
         final LocalDate start = LocalDate.of(2010, 1, 1);
         final LocalDate end = LocalDate.of(2012, 1, 1);
+        final String brazilianStock = "MGLU3.sa";
+        System.out.printf("%n%s quotes from %s to %s%n", brazilianStock, start, end);
+        final YahooFinance yahoo = new YahooFinance();
+        final DataFrame<LocalDate, String> returns = yahoo.getDailyReturns(start, end, Array.of(brazilianStock, "BID3.sa", "ITUB4.sa"));
+        returns.out().print(returns.rowCount());
+        System.out.println();
+
         final Array<String> tickers = Array.of("AAPL", "MSFT", "ORCL", "GE", "C");
         final YahooQuoteHistorySource source = new YahooQuoteHistorySource();
         tickers.forEach(ticker -> {
